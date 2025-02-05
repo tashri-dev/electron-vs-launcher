@@ -1,4 +1,3 @@
-// main.js
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
@@ -9,7 +8,8 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
-            enableRemoteModule: true
+            enableRemoteModule: true,
+            icon: './assets/favicon.ico'
         },
         title: "Make it Easy - Solution Launcher"
     });

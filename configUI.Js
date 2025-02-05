@@ -64,8 +64,8 @@ class ConfigUI {
                     this.updateConfigDisplay(config);
                     this.showNotification('Success', 'Configuration imported successfully', 'success');
                     // Reload solutions
-                    if (window.solutionLoader) {
-                        window.solutionLoader.loadSolutions();
+                    if (window.solutionManager) {
+                        window.solutionManager.loadSolutions();
                     }
                 }
             } catch (error) {
@@ -79,8 +79,8 @@ class ConfigUI {
         if (this.configManager.updateRootPath(rootPath)) {
             this.showNotification('Success', 'Root path updated successfully', 'success');
             this.loadInitialConfig();
-            if (window.solutionLoader) {
-                window.solutionLoader.loadSolutions();
+            if (window.SolutionManager) {
+                window.SolutionManager.loadSolutions();
             }
         }
     }
@@ -101,17 +101,17 @@ class ConfigUI {
             this.showNotification('Success', 'Solution added successfully', 'success');
             e.target.reset();
             this.loadInitialConfig();
-            if (window.solutionLoader) {
-                window.solutionLoader.loadSolutions();
+            if (window.SolutionManager) {
+                window.SolutionManager.loadSolutions();
             }
         }
     }
 
     showNotification(title, message, type) {
         if ('Notification' in window) {
-            new window.Notification(title, {
+            return new window.Notification(title, {
                 body: message,
-                icon: type === 'success' ? '/assets/check.png' : '/assets/close.png'
+                icon: type === 'success' ? './assets/check.png' : './assets/close.png'
             });
         }
     }

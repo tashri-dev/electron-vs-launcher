@@ -1,5 +1,5 @@
 {
-  "name": "electron-vs-launcher",
+  "name": "easy-launcher",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
@@ -14,16 +14,16 @@
       "output": "dist"
     },
     "win": {
-      "icon": "build/icon.ico"
+      "icon": "./assets/favicon.ico"
     },
     "mac": {
-      "icon": "build/icon.icns"
+      "icon": "./assets/favicon.ico"
     },
     "linux": {
-      "icon": "build/icon.png"
+      "icon": "./assets/favicon.ico"
     }
   },
-  "keywords": [],
+  "keywords": [ ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -34,6 +34,7 @@
   "dependencies": {
     "bootstrap": "^5.3.2",
     "electron-notification": "^1.0.0",
-    "font-awesome": "^4.7.0"
+    "font-awesome": "^4.7.0",
+    "winreg": "^1.2.5"
   }
 }

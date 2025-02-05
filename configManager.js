@@ -7,12 +7,6 @@ class ConfigManager {
         this.appDir = __dirname;
         this.configPath = './config.json';
         this.templatePath = './config.template.json';
-
-        console.log('ConfigManager initialized with paths:', {
-            configPath: this.configPath,
-            templatePath: this.templatePath
-        });
-
         // Ensure config exists
         this.initializeConfig();
     }
