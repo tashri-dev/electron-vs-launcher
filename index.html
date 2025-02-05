@@ -1,51 +1,168 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
-    />
-    <meta
-      http-equiv="X-Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
-    />
-    <title>Developed By Mahmoud ELgml</title>
-    <link
-      rel="stylesheet"
-      href="./node_modules/bootstrap/dist/css/bootstrap.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="./node_modules/font-awesome/css/font-awesome.min.css"
-    />
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
-  </head>
-  <body>
-    <main>
-      <div class="container mt-5">
-        <div clas="row mb-5 gap-2">
-          <button class="btn btn-secondary" id="clearBtn">
-            Reset Selections
-          </button>
-          <button class="btn btn-primary" id="selectAllBtn">
-            Select All
-          </button>
+<html lang="en">
 
-          <button class="btn btn-success" id="launchBtn">
-            Run Selected Solutions
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
+                 img-src 'self' data: https:; 
+                 script-src 'self' 'unsafe-inline'; 
+                 style-src 'self' 'unsafe-inline';" />
+  <title>Make it Easy</title>
+  <link rel="icon" type="image/x-icon" href="./assets/favicon.ico">
+  <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="./node_modules/font-awesome/css/font-awesome.min.css" />
+  <link rel="stylesheet" href="main.css">
+</head>
+
+<body>
+  <main class="main-container">
+    <div class="container">
+      <div class="actions-container">
+        <button class="btn btn-secondary" id="clearBtn">
+          <i class="fa fa-refresh me-2"></i>Reset Selections
+        </button>
+        <button class="btn btn-primary" id="selectAllBtn">
+          <i class="fa fa-check-square-o me-2"></i>Select All
+        </button>
+        <button class="btn btn-success" id="launchBtn">
+          <i class="fa fa-play me-2"></i>Run Selected Solutions
+        </button>
+        <button class="btn btn-success" id="get-latest-selected">
+          <i class="fa fa-cloud-download me-2"></i>Get Latest For Selected
+        </button>
+      </div>
+
+      <!-- Tab Navigation -->
+      <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="solutions-tab" data-bs-toggle="tab" data-bs-target="#solutions"
+            type="button" role="tab">
+            <i class="fa fa-list me-2"></i>Solutions
           </button>
-  
-          <button class="btn btn-success"  id="get-latest-selected">
-            Get Latest For Selected
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button"
+            role="tab">
+            <i class="fa fa-cog me-2"></i>Configuration
           </button>
+        </li>
+      </ul>
+
+      <!-- Tab Content -->
+      <div class="tab-content" id="mainTabsContent">
+        <!-- Solutions Tab -->
+        <div class="tab-pane fade show active" id="solutions" role="tabpanel">
+          <div id="solutionsContainer"></div>
         </div>
 
-        <div id="solutionsContainer" class="mt-3"></div>
+        <!-- Configuration Tab -->
+        <div class="tab-pane fade" id="config" role="tabpanel">
+          <div class="config-manager card">
+            <div class="card-body">
+              <h5 class="card-title mb-4">Configuration Management</h5>
 
+              <!-- Root Path Section -->
+              <div class="mb-4">
+                <label class="form-label">Root Path</label>
+                <div class="input-group">
+                  <input type="text" class="form-control" id="rootPathInput" placeholder="Enter root path">
+                  <button class="btn btn-primary" id="updateRootPath">
+                    <i class="fa fa-save me-2"></i>Update
+                  </button>
+                </div>
+              </div>
+
+              <!-- Import Configuration Section -->
+              <div class="mb-4">
+                <h6 class="mb-3">Import Configuration</h6>
+                <div class="import-config-section p-3 bg-light rounded">
+                  <div class="mb-3">
+                    <label for="configFile" class="form-label">Upload Configuration File</label>
+                    <input type="file" class="form-control" id="configFile" accept=".json">
+                  </div>
+                  <button class="btn btn-primary" id="importConfig">
+                    <i class="fa fa-upload me-2"></i>Import Configuration
+                  </button>
+                </div>
+              </div>
+
+              <!-- Add New Solution Section -->
+              <div class="add-solution-form">
+                <h6 class="mb-3">Add New Solution</h6>
+                <form id="addSolutionForm">
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label class="form-label">Solution Name</label>
+                      <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Relative Path</label>
+                      <input type="text" class="form-control" name="path" required>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Type</label>
+                      <select class="form-select" name="type" required>
+                        <option value="dotnet">Dotnet</option>
+                        <option value="nodejs">NodeJS</option>
+                        <option value="angular">Angular</option>
+                        <option value="electron">Electron</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Docker Port (Optional)</label>
+                      <input type="number" class="form-control" name="dockerPort">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Container Name (Optional)</label>
+                      <input type="text" class="form-control" name="imageContainerName">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Migrator Path (Optional)</label>
+                      <input type="text" class="form-control" name="migratorPath">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Context Folder (Optional)</label>
+                      <input type="text" class="form-control" name="contextFolder">
+                    </div>
+                    <div class="col-12">
+                      <button type="submit" class="btn btn-success">
+                        <i class="fa fa-plus me-2"></i>Add Solution
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Current Configuration Section -->
+              <div class="mt-4">
+                <h6 class="mb-3">Current Configuration</h6>
+                <div class="current-config">
+                  <pre id="currentConfig" class="bg-light p-3 rounded"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </main>
-  </body>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <span>Initiated by </span>
+        <span class="footer-brain">Mahmoud Elgml</span>
+        <span>, contributed by </span>
+        <span class="footer-brain">Taha Ashri</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./configManager.js"></script>
+  <script src="./solutionManager.js"></script>
+  <script src="./configUI.js"></script>
   <script src="./renderer.js"></script>
   <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+</body>
+
 </html>
