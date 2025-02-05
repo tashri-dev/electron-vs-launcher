@@ -1,0 +1,14 @@
+{
+    "rootPath": "",
+    "solutions": [
+        {
+            "name": "Example Solution",
+            "path": "ExamplePath\\Solution.sln",
+            "type": "dotnet",
+            "migratorPath": "ExamplePath\\Migrator\\Migrator.csproj",
+            "dockerPort": 5001,
+            "contextFolder": "ExamplePath",
+            "imageContainerName": "example-solution"
+        }
+    ]
+}
