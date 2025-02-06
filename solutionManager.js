@@ -287,10 +287,38 @@ class SolutionManager {
         });
     }
 
+    async getLatest(solutionPath) {
+        try {
+            // Split path and get directory
+            const fullPath = solutionPath;
+            const directory = path.dirname(fullPath);
+            const name = path.basename(solutionPath);
+
+            // Execute git commands
+            await new Promise((resolve, reject) => {
+                exec(
+                    `cd "${directory}" && git checkout master_dev && git pull`,
+                    (error, stdout, stderr) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+                        console.log('Git output:', stdout);
+                        resolve(stdout);
+                    }
+                );
+            });
+
+            this.showNotification('Success', `Updated ${name} successfully`, 'success');
+        } catch (error) {
+            console.error('Git error:', error);
+            this.showNotification('Error', `Failed to update ${path.basename(solutionPath)}: ${error.message}`, 'error');
+        }
+    }
+
     async getLatestForSelected() {
         try {
             const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-            console.log(`Found ${selectedCheckboxes.length} selected solutions for update`);
 
             if (selectedCheckboxes.length === 0) {
                 this.showNotification('Warning', 'Please select at least one solution', 'warning');
@@ -298,41 +326,14 @@ class SolutionManager {
             }
 
             for (const checkbox of selectedCheckboxes) {
-                const solutionPath = checkbox.value;
-                console.log('Getting latest for:', solutionPath);
-
-                try {
-                    const pathArray = solutionPath.split('\\');
-                    const name = pathArray[pathArray.length - 1];
-                    const directory = pathArray.slice(0, -1).join('\\');
-
-                    await new Promise((resolve, reject) => {
-                        exec(`cd "${directory}" && git checkout master_dev && git pull`,
-                            (error, stdout, stderr) => {
-                                if (error) {
-                                    console.error('Git error:', { error, stderr });
-                                    reject(error);
-                                    return;
-                                }
-                                console.log('Git output:', stdout);
-                                resolve(stdout);
-                            });
-                    });
-
-                    this.showNotification('Success', `Updated ${name} successfully`, 'success');
-                } catch (error) {
-                    this.showNotification('Error',
-                        `Failed to update ${path.basename(solutionPath)}: ${error.message}`,
-                        'error'
-                    );
-                }
+                let solutionPath = path.join(rootPathGlobal, checkbox.value);
+                await this.getLatest(solutionPath);
             }
         } catch (error) {
-            console.error('Error in getLatestForSelected:', error);
+            console.error('Error updating selected solutions:', error);
             this.showNotification('Error', `Operation failed: ${error.message}`, 'error');
         }
     }
-
     runSelectedSolutions() {
         try {
             const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
