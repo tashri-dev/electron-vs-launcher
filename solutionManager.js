@@ -457,9 +457,11 @@ class SolutionManager {
             const args = [solutionPath];
 
             if (debug) {
+                // For debug mode, just use /Run
                 args.push('/Run');
             } else {
-                args.push('/Run', 'Debug.StartWithoutDebugging');
+                // For no-debug mode, use the command to start without debugging
+                args.push('/Command', 'Debug.StartWithoutDebugging');
             }
 
             console.log('Spawning VS2022:', { devenvPath, args });
@@ -549,10 +551,22 @@ class SolutionManager {
         try {
             let solutionPath = path.join(rootPathGlobal, solution.path);
             console.log('Launching VS Code:', solution);
-            const solutionDir = path.dirname(solutionPath);
+
+            // Determine the directory to open based on solution type
+            let dirToOpen;
+            if (solution.type === 'dotnet') {
+                // For .NET solutions, use the parent directory of the .sln file
+                dirToOpen = path.dirname(solutionPath);
+            } else {
+                // For Node.js, Angular, etc., use the solution path directly
+                // If the path is a file, use its directory, otherwise use the path itself
+                dirToOpen = fs.statSync(solutionPath).isFile() ? path.dirname(solutionPath) : solutionPath;
+            }
+
+            console.log('Opening VS Code at:', dirToOpen);
 
             // Launch VS Code
-            const vsCodeProcess = spawn('code', [solutionDir], { shell: true });
+            const vsCodeProcess = spawn('code', [dirToOpen], { shell: true });
 
             vsCodeProcess.on('error', (error) => {
                 console.error('VS Code launch error:', error);
@@ -574,7 +588,7 @@ class SolutionManager {
 
                 if (commands.length > 0) {
                     console.log('Running additional commands:', commands);
-                    const terminal = spawn('cmd.exe', ['/k', `cd "${solutionDir}" && ${commands.join(' && ')}`], {
+                    const terminal = spawn('cmd.exe', ['/k', `cd "${dirToOpen}" && ${commands.join(' && ')}`], {
                         shell: true,
                         detached: true,
                         stdio: 'inherit'

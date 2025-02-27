@@ -9,7 +9,7 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false,
             enableRemoteModule: true,
-            icon: './assets/favicon.ico'
+            icon: path.join(__dirname, 'assets', '.', 'png', '256x256.png')
         },
         title: "Make it Easy - Solution Launcher"
     });

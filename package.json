@@ -14,7 +14,9 @@
       "output": "dist"
     },
     "win": {
-      "icon": "./assets/favicon.ico"
+      "icon": "./assets/apg.png",
+      "title": "Easy launcher",
+      "msi": true
     },
     "mac": {
       "icon": "./assets/favicon.ico"
