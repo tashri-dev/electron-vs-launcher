@@ -180,3 +180,8 @@ Common issues and solutions:
    - Verify IDE installations
    - Check file associations
    - Verify solution file integrity
+
+## Publishing the app
+   ```bash
+   npx electron-packager . "make it easy" --platform=win32 --arch=x64 --icon=assets/icons/win/app.ico --overwrite
+   ```
