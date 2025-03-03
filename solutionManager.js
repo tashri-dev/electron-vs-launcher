@@ -294,19 +294,66 @@ class SolutionManager {
             const directory = path.dirname(fullPath);
             const name = path.basename(solutionPath);
 
-            // Execute git commands
-            await new Promise((resolve, reject) => {
-                exec(
-                    `cd "${directory}" && git checkout master_dev && git pull`,
-                    (error, stdout, stderr) => {
+            // Find the solution object to determine its type
+            const solutionRelativePath = solutionPath.replace(rootPathGlobal, '').replace(/^\\/g, '');
+            const solution = this.solutions.find(s => s.path === solutionRelativePath);
+            const solutionType = solution ? solution.type : 'dotnet'; // Default to dotnet if not found
+
+            console.log(`Getting latest for ${name}, type: ${solutionType}`);
+
+            // Determine the default branch based on solution type
+            let defaultBranch = 'master_dev'; // Default for .NET solutions
+
+            if (solutionType === 'angular' || solutionType === 'nodejs' || solutionType === 'react') {
+                defaultBranch = 'main'; // Common default for frontend projects
+            }
+
+            // First, try to detect the current branch
+            let currentBranch;
+            try {
+                currentBranch = await new Promise((resolve, reject) => {
+                    exec(`cd "${directory}" && git rev-parse --abbrev-ref HEAD`, (error, stdout, stderr) => {
                         if (error) {
                             reject(error);
                             return;
                         }
-                        console.log('Git output:', stdout);
-                        resolve(stdout);
+                        resolve(stdout.trim());
+                    });
+                });
+                console.log(`Detected current branch: ${currentBranch}`);
+            } catch (error) {
+                console.warn(`Could not detect current branch: ${error.message}`);
+                currentBranch = defaultBranch;
+            }
+
+            // Execute git commands with proper error handling
+            await new Promise((resolve, reject) => {
+                // If we're already on a branch, just pull. Otherwise, checkout the default branch first
+                const gitCommand = `cd "${directory}" && git fetch --all && ${currentBranch !== defaultBranch ? `git checkout ${defaultBranch} && ` : ''}git pull`;
+
+                console.log(`Executing git command: ${gitCommand}`);
+
+                exec(gitCommand, (error, stdout, stderr) => {
+                    if (error) {
+                        // If checkout fails, try to pull on the current branch
+                        if (error.message.includes('checkout') || error.message.includes('not found')) {
+                            console.warn(`Could not checkout ${defaultBranch}, trying to pull on current branch ${currentBranch}`);
+                            exec(`cd "${directory}" && git pull`, (err2, stdout2, stderr2) => {
+                                if (err2) {
+                                    reject(err2);
+                                    return;
+                                }
+                                console.log('Git pull output:', stdout2);
+                                resolve(stdout2);
+                            });
+                            return;
+                        }
+                        reject(error);
+                        return;
                     }
-                );
+                    console.log('Git output:', stdout);
+                    resolve(stdout);
+                });
             });
 
             this.showNotification('Success', `Updated ${name} successfully`, 'success');
