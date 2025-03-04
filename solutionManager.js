@@ -18,6 +18,11 @@ class SolutionManager {
             RIDER_NO_DEBUG: 'Rider (Without Debug)',
             VSCODE: 'VS Code'
         };
+        this.ENVIRONMENTS = {
+            DEV: { name: 'Dev', branch: 'master_dev' },
+            SIT: { name: 'SIT', branch: 'master_sit' },
+            UAT: { name: 'UAT', branch: 'master_uat' }
+        };
         this.init();
     }
 
@@ -152,6 +157,11 @@ class SolutionManager {
         // Add IDE selector
         const ideSelector = this.createIdeSelector(solution);
         wrapper.appendChild(ideSelector);
+
+        // Add Environment selector
+        const envSelector = this.createEnvironmentSelector(solution);
+        wrapper.appendChild(envSelector);
+
         nameCell.appendChild(wrapper);
 
         // Actions cell
@@ -185,6 +195,21 @@ class SolutionManager {
         return select;
     }
 
+    createEnvironmentSelector(solution) {
+        const select = document.createElement('select');
+        select.classList.add('form-select', 'form-select-sm', 'w-auto');
+        select.setAttribute('data-solution-id', this.getSolutionId(solution));
+
+        Object.entries(this.ENVIRONMENTS).forEach(([key, env]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = env.name;
+            select.appendChild(option);
+        });
+
+        return select;
+    }
+
     createActionButtons(solution) {
         const container = document.createElement('div');
         container.classList.add('d-flex', 'gap-2');
@@ -193,7 +218,7 @@ class SolutionManager {
         const getLatestBtn = document.createElement('button');
         getLatestBtn.classList.add('btn', 'btn-secondary', 'btn-sm');
         getLatestBtn.innerHTML = '<i class="fa fa-download"></i>';
-        getLatestBtn.onclick = () => this.getLatest(solutionPath);
+        getLatestBtn.onclick = () => this.getLatest(solutionPath, solution.name, solution.type);
         container.appendChild(getLatestBtn);
 
         // Update DB button
@@ -287,27 +312,57 @@ class SolutionManager {
         });
     }
 
-    async getLatest(solutionPath) {
+    async getLatestForSelected() {
         try {
-            // Split path and get directory
-            const fullPath = solutionPath;
-            const directory = path.dirname(fullPath);
-            const name = path.basename(solutionPath);
+            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
 
-            // Find the solution object to determine its type
-            const solutionRelativePath = solutionPath.replace(rootPathGlobal, '').replace(/^\\/g, '');
-            const solution = this.solutions.find(s => s.path === solutionRelativePath);
-            const solutionType = solution ? solution.type : 'dotnet'; // Default to dotnet if not found
-
-            console.log(`Getting latest for ${name}, type: ${solutionType}`);
-
-            // Determine the default branch based on solution type
-            let defaultBranch = 'master_dev'; // Default for .NET solutions
-
-            if (solutionType === 'angular' || solutionType === 'nodejs' || solutionType === 'react') {
-                defaultBranch = 'main'; // Common default for frontend projects
+            if (selectedCheckboxes.length === 0) {
+                this.showNotification('Warning', 'Please select at least one solution', 'warning');
+                return;
             }
 
+            for (const checkbox of selectedCheckboxes) {
+                const solutionPath = checkbox.value;
+                const solution = this.solutions.find(s => s.path === solutionPath);
+                if (!solution) {
+                    console.error(`Solution not found for path: ${solutionPath}`);
+                    continue;
+                }
+                const directory = this.getSolutionDirectory(solution);
+
+                // Get the environment selector for this solution
+                const envSelector = document.querySelector(`select[data-solution-id="${this.getSolutionId(solution)}"]`);
+                const selectedEnv = envSelector ? envSelector.value : 'DEV';
+                const targetBranch = this.ENVIRONMENTS[selectedEnv].branch;
+
+                await this.getLatest(directory, solution.name, solution.type, targetBranch);
+            }
+        } catch (error) {
+            console.error('Error updating selected solutions:', error);
+            this.showNotification('Error', `Operation failed: ${error.message}`, 'error');
+        }
+    }
+
+    getSolutionDirectory(solution) {
+        let solutionPath = path.join(rootPathGlobal, solution.path);
+
+        // For .NET solutions, use the parent directory of the .sln file
+        if (solution.type === 'dotnet') {
+            return path.dirname(solutionPath);
+        }
+
+        // For Node.js, Angular, etc., use the solution path directly
+        // If the path is a file, use its directory, otherwise use the path itself
+        try {
+            return fs.statSync(solutionPath).isFile() ? path.dirname(solutionPath) : solutionPath;
+        } catch (error) {
+            console.warn(`Error checking file stats: ${error.message}`);
+            return solutionPath;
+        }
+    }
+
+    async getLatest(directory, name, solutionType, targetBranch) {
+        try {
             // First, try to detect the current branch
             let currentBranch;
             try {
@@ -323,13 +378,13 @@ class SolutionManager {
                 console.log(`Detected current branch: ${currentBranch}`);
             } catch (error) {
                 console.warn(`Could not detect current branch: ${error.message}`);
-                currentBranch = defaultBranch;
+                currentBranch = targetBranch;
             }
 
             // Execute git commands with proper error handling
             await new Promise((resolve, reject) => {
-                // If we're already on a branch, just pull. Otherwise, checkout the default branch first
-                const gitCommand = `cd "${directory}" && git fetch --all && ${currentBranch !== defaultBranch ? `git checkout ${defaultBranch} && ` : ''}git pull`;
+                // If we're already on the target branch, just pull. Otherwise, checkout the target branch first
+                const gitCommand = `cd "${directory}" && git fetch --all && ${currentBranch !== targetBranch ? `git checkout ${targetBranch} && ` : ''}git pull`;
 
                 console.log(`Executing git command: ${gitCommand}`);
 
@@ -337,7 +392,7 @@ class SolutionManager {
                     if (error) {
                         // If checkout fails, try to pull on the current branch
                         if (error.message.includes('checkout') || error.message.includes('not found')) {
-                            console.warn(`Could not checkout ${defaultBranch}, trying to pull on current branch ${currentBranch}`);
+                            console.warn(`Could not checkout ${targetBranch}, trying to pull on current branch ${currentBranch}`);
                             exec(`cd "${directory}" && git pull`, (err2, stdout2, stderr2) => {
                                 if (err2) {
                                     reject(err2);
@@ -359,28 +414,10 @@ class SolutionManager {
             this.showNotification('Success', `Updated ${name} successfully`, 'success');
         } catch (error) {
             console.error('Git error:', error);
-            this.showNotification('Error', `Failed to update ${path.basename(solutionPath)}: ${error.message}`, 'error');
+            this.showNotification('Error', `Failed to update ${name}: ${error.message}`, 'error');
         }
     }
 
-    async getLatestForSelected() {
-        try {
-            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-
-            if (selectedCheckboxes.length === 0) {
-                this.showNotification('Warning', 'Please select at least one solution', 'warning');
-                return;
-            }
-
-            for (const checkbox of selectedCheckboxes) {
-                let solutionPath = path.join(rootPathGlobal, checkbox.value);
-                await this.getLatest(solutionPath);
-            }
-        } catch (error) {
-            console.error('Error updating selected solutions:', error);
-            this.showNotification('Error', `Operation failed: ${error.message}`, 'error');
-        }
-    }
     runSelectedSolutions() {
         try {
             const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
@@ -596,21 +633,7 @@ class SolutionManager {
 
     async launchInVSCode(solution) {
         try {
-            let solutionPath = path.join(rootPathGlobal, solution.path);
-            console.log('Launching VS Code:', solution);
-
-            // Determine the directory to open based on solution type
-            let dirToOpen;
-            if (solution.type === 'dotnet') {
-                // For .NET solutions, use the parent directory of the .sln file
-                dirToOpen = path.dirname(solutionPath);
-            } else {
-                // For Node.js, Angular, etc., use the solution path directly
-                // If the path is a file, use its directory, otherwise use the path itself
-                dirToOpen = fs.statSync(solutionPath).isFile() ? path.dirname(solutionPath) : solutionPath;
-            }
-
-            console.log('Opening VS Code at:', dirToOpen);
+            const dirToOpen = this.getSolutionDirectory(solution);
 
             // Launch VS Code
             const vsCodeProcess = spawn('code', [dirToOpen], { shell: true });
@@ -709,7 +732,6 @@ class SolutionManager {
     }
 
     showNotification(title, message, type = 'info') {
-        // Log to console with proper formatting
         const timestamp = new Date().toISOString();
         const logMessage = `[${timestamp}] [${type.toUpperCase()}] ${title}: ${message}`;
 

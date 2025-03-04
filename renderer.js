@@ -46,7 +46,7 @@ function initializeEventListeners() {
     });
   } catch (error) {
     console.error('Failed to initialize event listeners:', error);
-    throw error; // Re-throw to be caught by the parent try-catch
+    throw error;
   }
 }
 
