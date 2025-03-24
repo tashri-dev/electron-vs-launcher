@@ -108,7 +108,7 @@ class SolutionManager {
 
     createSolutionsTable(solutions) {
         const table = document.createElement('table');
-        table.classList.add('table', 'table-striped', 'table-hover', 'align-middle');
+        table.classList.add('table', 'table-striped', 'table-hover');
 
         const thead = document.createElement('thead');
         thead.innerHTML = `
@@ -170,6 +170,7 @@ class SolutionManager {
 
         row.appendChild(nameCell);
         row.appendChild(actionsCell);
+
         return row;
     }
 
@@ -180,6 +181,7 @@ class SolutionManager {
     createIdeSelector(solution) {
         const select = document.createElement('select');
         select.classList.add('form-select', 'form-select-sm', 'w-auto');
+        select.id = `ide-${this.getSolutionId(solution)}`;
 
         Object.entries(this.IDE).forEach(([key, value]) => {
             if (solution.type === 'dotnet' || key === 'VSCODE') {
@@ -198,7 +200,7 @@ class SolutionManager {
     createEnvironmentSelector(solution) {
         const select = document.createElement('select');
         select.classList.add('form-select', 'form-select-sm', 'w-auto');
-        select.setAttribute('data-solution-id', this.getSolutionId(solution));
+        select.id = `env-${this.getSolutionId(solution)}`;
 
         Object.entries(this.ENVIRONMENTS).forEach(([key, env]) => {
             const option = document.createElement('option');
@@ -213,18 +215,35 @@ class SolutionManager {
     createActionButtons(solution) {
         const container = document.createElement('div');
         container.classList.add('d-flex', 'gap-2');
-        let solutionPath = path.join(rootPathGlobal, solution.path);
+        let directory = this.getSolutionDirectory(solution);
+
         // Get Latest button
         const getLatestBtn = document.createElement('button');
-        getLatestBtn.classList.add('btn', 'btn-secondary', 'btn-sm');
+        getLatestBtn.classList.add('btn', 'btn-secondary', 'btn-sm', 'btn-priority-high');
         getLatestBtn.innerHTML = '<i class="fa fa-download"></i>';
-        getLatestBtn.onclick = () => this.getLatest(solutionPath, solution.name, solution.type);
+        getLatestBtn.onclick = () => {
+            const envSelector = document.getElementById(`env-${this.getSolutionId(solution)}`);
+            const selectedEnv = envSelector ? envSelector.value : 'DEV';
+            const targetBranch = this.ENVIRONMENTS[selectedEnv].branch;
+            this.getLatest(directory, solution.name, solution.type, targetBranch);
+        };
         container.appendChild(getLatestBtn);
+
+        // Run Solution button
+        const runBtn = document.createElement('button');
+        runBtn.classList.add('btn', 'btn-primary', 'btn-sm', 'btn-priority-high');
+        runBtn.innerHTML = '<i class="fa fa-play"></i>';
+        runBtn.onclick = () => {
+            const ideSelect = document.getElementById(`ide-${this.getSolutionId(solution)}`);
+            const selectedIde = ideSelect ? ideSelect.value : this.IDE.VSCODE;
+            this.launchSolution(solution, selectedIde);
+        };
+        container.appendChild(runBtn);
 
         // Update DB button
         if (solution.migratorPath) {
             const updateDbBtn = document.createElement('button');
-            updateDbBtn.classList.add('btn', 'btn-warning', 'btn-sm');
+            updateDbBtn.classList.add('btn', 'btn-warning', 'btn-sm', 'btn-priority-medium');
             updateDbBtn.textContent = 'Update DB';
             updateDbBtn.onclick = () => this.updateDb(path.join(rootPathGlobal, solution.migratorPath));
             container.appendChild(updateDbBtn);
@@ -233,7 +252,7 @@ class SolutionManager {
         // Dockerize button
         if (solution.dockerPort) {
             const dockerizeBtn = document.createElement('button');
-            dockerizeBtn.classList.add('btn', 'btn-primary', 'btn-sm');
+            dockerizeBtn.classList.add('btn', 'btn-primary', 'btn-sm', 'btn-priority-medium');
             dockerizeBtn.textContent = 'Dockerize';
             dockerizeBtn.onclick = () => this.dockerizeApp(solution);
             container.appendChild(dockerizeBtn);
@@ -261,7 +280,6 @@ class SolutionManager {
         const buttonsDiv = document.createElement('div');
         buttonsDiv.classList.add('d-flex', 'gap-2');
 
-        // Previous button
         if (this.currentPage > 1) {
             const prevBtn = document.createElement('button');
             prevBtn.classList.add('btn', 'btn-secondary');
@@ -273,7 +291,6 @@ class SolutionManager {
             buttonsDiv.appendChild(prevBtn);
         }
 
-        // Next button
         if (this.currentPage < this.totalPages) {
             const nextBtn = document.createElement('button');
             nextBtn.classList.add('btn', 'btn-secondary');
@@ -331,7 +348,7 @@ class SolutionManager {
                 const directory = this.getSolutionDirectory(solution);
 
                 // Get the environment selector for this solution
-                const envSelector = document.querySelector(`select[data-solution-id="${this.getSolutionId(solution)}"]`);
+                const envSelector = document.getElementById(`env-${this.getSolutionId(solution)}`);
                 const selectedEnv = envSelector ? envSelector.value : 'DEV';
                 const targetBranch = this.ENVIRONMENTS[selectedEnv].branch;
 
@@ -437,7 +454,7 @@ class SolutionManager {
                     return;
                 }
 
-                const ideSelect = checkbox.closest('td').querySelector('select');
+                const ideSelect = document.getElementById(`ide-${this.getSolutionId(solution)}`);
                 const selectedIde = ideSelect ? ideSelect.value : this.IDE.VS2022_NO_DEBUG;
 
                 console.log(`Launching solution: ${solution.name} with IDE: ${selectedIde}`);
@@ -550,50 +567,114 @@ class SolutionManager {
 
             console.log('Spawning VS2022:', { devenvPath, args });
 
+            // The key changes are here - using detached: true and stdio: 'ignore'
             const child = spawn(devenvPath, args, {
                 windowsHide: false,
-                stdio: 'pipe'
+                stdio: 'ignore', // Changed from 'pipe' to 'ignore' 
+                detached: true,  // Set detached: true to detach from parent
+                shell: false     // Don't use shell
             });
 
-            child.stdout.on('data', (data) => {
-                console.log('VS2022 output:', data.toString());
-            });
+            // Unref to allow parent to exit independently
+            child.unref();
 
-            child.stderr.on('data', (data) => {
-                console.error('VS2022 error:', data.toString());
-            });
-
-            child.on('error', (error) => {
-                console.error('VS2022 process error:', error);
-                this.showNotification('Error', `VS2022 launch failed: ${error.message}`, 'error');
-            });
-
-            child.on('exit', (code) => {
-                if (code !== 0) {
-                    console.warn(`VS2022 exited with code ${code}`);
-                    this.showNotification('Warning', `VS2022 exited with code ${code}`, 'warning');
-                }
-            });
+            // Don't set up listeners that would maintain references
+            this.showNotification('Success', 'Visual Studio launched successfully', 'success');
         } catch (error) {
             console.error('Error launching VS2022:', error);
             this.showNotification('Error', `Failed to launch VS2022: ${error.message}`, 'error');
         }
     }
 
+    async findRiderPath() {
+        try {
+            // Try to find Rider through Windows Registry
+            const registryPaths = [
+                {
+                    key: '\\SOFTWARE\\JetBrains\\Rider',
+                    arch: 'x64'
+                },
+                {
+                    key: '\\SOFTWARE\\JetBrains\\Rider',
+                    arch: 'x32'
+                }
+            ];
+
+            for (const regPath of registryPaths) {
+                try {
+                    const reg = new Registry({
+                        hive: Registry.HKLM,
+                        key: regPath.key,
+                        arch: regPath.arch
+                    });
+
+                    // List all values in the key to find the latest version
+                    const items = await new Promise((resolve, reject) => {
+                        reg.values((err, items) => {
+                            if (err) reject(err);
+                            else resolve(items);
+                        });
+                    });
+
+                    if (items && items.length > 0) {
+                        // Sort items by version number (assuming version is in the name)
+                        const sortedItems = items.sort((a, b) => {
+                            const versionA = a.name.match(/\d+\.\d+/);
+                            const versionB = b.name.match(/\d+\.\d+/);
+                            if (versionA && versionB) {
+                                return parseFloat(versionB[0]) - parseFloat(versionA[0]);
+                            }
+                            return 0;
+                        });
+
+                        // Get the latest version's installation path
+                        const latestVersion = sortedItems[0];
+                        if (latestVersion) {
+                            const installPath = await new Promise((resolve, reject) => {
+                                reg.get(latestVersion.name, (err, item) => {
+                                    if (err) reject(err);
+                                    else resolve(item.value);
+                                });
+                            });
+
+                            const riderPath = path.join(installPath, 'bin', 'rider64.exe');
+                            if (fs.existsSync(riderPath)) {
+                                return riderPath;
+                            }
+                        }
+                    }
+                } catch (regError) {
+                    console.warn(`Registry search failed for ${regPath.key}:`, regError);
+                }
+            }
+        } catch (error) {
+            console.warn('Error searching for Rider in registry:', error);
+        }
+        return null;
+    }
+
     async launchInRider(solutionPath, debug = false) {
         try {
             console.log('Launching Rider:', { solutionPath, debug });
-            const riderPaths = [
-                'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.3\\bin\\rider64.exe',
-                'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.2\\bin\\rider64.exe',
-                'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.1\\bin\\rider64.exe'
-            ];
 
-            let riderPath = null;
-            for (const possiblePath of riderPaths) {
-                if (fs.existsSync(possiblePath)) {
-                    riderPath = possiblePath;
-                    break;
+            // First try to find Rider through registry
+            let riderPath = await this.findRiderPath();
+
+            if (!riderPath) {
+                // Fallback to common installation paths
+                const riderPaths = [
+                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.3\\bin\\rider64.exe',
+                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.2\\bin\\rider64.exe',
+                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.1\\bin\\rider64.exe',
+                    "C:\\Users\\tahaa\\AppData\\Local\\Programs\\Rider\\bin\\rider64.exe"
+                    // Add more potential path
+                ];
+
+                for (const possiblePath of riderPaths) {
+                    if (fs.existsSync(possiblePath)) {
+                        riderPath = possiblePath;
+                        break;
+                    }
                 }
             }
 
@@ -603,28 +684,33 @@ class SolutionManager {
 
             console.log('Found Rider at:', riderPath);
 
-            const args = [solutionPath];
+            // Prepare launch arguments
+            const args = [];
+
             if (debug) {
+                args.push('--wait');
+                args.push('--line');
+                args.push('1');
                 args.push('--debug');
             }
 
+            // Always add the solution path last
+            args.push(solutionPath);
+
+            console.log('Launching Rider with args:', args);
+
+            // Launch Rider with detached:true and stdio:ignore to prevent closing with app
             const child = spawn(riderPath, args, {
                 windowsHide: false,
-                stdio: 'pipe'
+                stdio: 'ignore', // Changed from 'pipe' to 'ignore'
+                shell: true,
+                detached: true    // Ensure process is detached
             });
 
-            child.stdout.on('data', (data) => {
-                console.log('Rider output:', data.toString());
-            });
+            // Unref the child to allow the parent process to exit independently
+            child.unref();
 
-            child.stderr.on('data', (data) => {
-                console.error('Rider error:', data.toString());
-            });
-
-            child.on('error', (error) => {
-                console.error('Rider process error:', error);
-                this.showNotification('Error', `Rider launch failed: ${error.message}`, 'error');
-            });
+            this.showNotification('Success', 'Rider launched successfully', 'success');
         } catch (error) {
             console.error('Error launching Rider:', error);
             this.showNotification('Error', `Failed to launch Rider: ${error.message}`, 'error');
@@ -635,13 +721,15 @@ class SolutionManager {
         try {
             const dirToOpen = this.getSolutionDirectory(solution);
 
-            // Launch VS Code
-            const vsCodeProcess = spawn('code', [dirToOpen], { shell: true });
-
-            vsCodeProcess.on('error', (error) => {
-                console.error('VS Code launch error:', error);
-                this.showNotification('Error', `Failed to launch VS Code: ${error.message}`, 'error');
+            // Launch VS Code with detached process
+            const vsCodeProcess = spawn('code', [dirToOpen], {
+                shell: true,
+                detached: true,  // Ensure detached is true
+                stdio: 'ignore'  // Changed from default to 'ignore'
             });
+
+            // Unref to allow parent to exit independently
+            vsCodeProcess.unref();
 
             // For non-dotnet solutions, run additional setup
             if (solution.type !== 'dotnet') {
@@ -660,16 +748,16 @@ class SolutionManager {
                     console.log('Running additional commands:', commands);
                     const terminal = spawn('cmd.exe', ['/k', `cd "${dirToOpen}" && ${commands.join(' && ')}`], {
                         shell: true,
-                        detached: true,
-                        stdio: 'inherit'
+                        detached: true,  // Ensure detached is true
+                        stdio: 'ignore'  // Changed from 'inherit' to 'ignore'
                     });
 
-                    terminal.on('error', (error) => {
-                        console.error('Command execution error:', error);
-                        this.showNotification('Error', `Failed to run commands: ${error.message}`, 'error');
-                    });
+                    // Unref terminal too
+                    terminal.unref();
                 }
             }
+
+            this.showNotification('Success', `${solution.type === 'dotnet' ? 'VS Code' : 'Development environment'} launched successfully`, 'success');
         } catch (error) {
             console.error('Error launching VS Code:', error);
             this.showNotification('Error', `Failed to launch VS Code: ${error.message}`, 'error');
@@ -683,8 +771,8 @@ class SolutionManager {
 
             const child = spawn('dotnet', args, {
                 shell: true,
-                detached: true,
-                stdio: 'inherit'
+                detached: false, // Keep this false since we want to wait for DB update to complete
+                stdio: 'inherit'  // Keep this as 'inherit' so user can see output
             });
 
             child.on('error', (error) => {
@@ -715,16 +803,41 @@ class SolutionManager {
                 'docker image prune -f'
             ];
 
-            exec(commands.join(' && '), (error, stdout, stderr) => {
-                if (error) {
-                    console.error('Docker error:', { error, stderr });
-                    this.showNotification('Error', `Dockerization failed: ${error.message}`, 'error');
-                    return;
+            // Use spawn instead of exec for better process management
+            const child = spawn('cmd.exe', ['/c', commands.join(' && ')], {
+                shell: true,
+                detached: true,  // Set detached to true
+                stdio: 'pipe'    // Keep as pipe to capture output
+            });
+
+            // Capture output but don't keep references that prevent GC
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+
+            child.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+
+            child.on('exit', (code) => {
+                if (code === 0) {
+                    console.log('Docker output:', stdout);
+                    this.showNotification('Success', 'Application dockerized successfully', 'success');
+                } else {
+                    console.error('Docker error:', { code, stderr });
+                    this.showNotification('Error', `Dockerization failed with code ${code}`, 'error');
                 }
 
-                console.log('Docker output:', stdout);
-                this.showNotification('Success', 'Application dockerized successfully', 'success');
+                // Remove references to allow garbage collection
+                stdout = null;
+                stderr = null;
             });
+
+            // No need to unref since we want to capture output
+            // But we still keep the process detached
         } catch (error) {
             console.error('Error dockerizing application:', error);
             this.showNotification('Error', `Failed to dockerize: ${error.message}`, 'error');

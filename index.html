@@ -12,22 +12,35 @@
   <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css" />
   <link rel="stylesheet" href="./node_modules/font-awesome/css/font-awesome.min.css" />
   <link rel="stylesheet" href="main.css">
+  <style>
+    .actions-cell .btn-sm {
+      display: inline-flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    @media (max-width: 768px) {
+      .actions-cell .btn-sm:nth-child(n+4) {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
 
 <body>
   <main class="main-container">
     <div class="container">
       <div class="actions-container">
-        <button class="btn btn-secondary" id="clearBtn">
+        <button class="btn btn-secondary btn-priority-low" id="clearBtn">
           <i class="fa fa-refresh me-2"></i>Reset Selections
         </button>
-        <button class="btn btn-primary" id="selectAllBtn">
+        <button class="btn btn-primary btn-priority-medium" id="selectAllBtn">
           <i class="fa fa-check-square-o me-2"></i>Select All
         </button>
-        <button class="btn btn-success" id="launchBtn">
+        <button class="btn btn-success btn-priority-high" id="launchBtn">
           <i class="fa fa-play me-2"></i>Run Selected Solutions
         </button>
-        <button class="btn btn-success" id="get-latest-selected">
+        <button class="btn btn-success btn-priority-medium" id="get-latest-selected">
           <i class="fa fa-cloud-download me-2"></i>Get Latest For Selected
         </button>
       </div>
@@ -162,6 +175,24 @@
   <script src="./configUI.js"></script>
   <script src="./renderer.js"></script>
   <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+  <script>
+    // Add a check for horizontal scroll in tables
+    document.addEventListener('DOMContentLoaded', function () {
+      function checkTableScroll() {
+        document.querySelectorAll('.table-responsive').forEach(function (tableWrapper) {
+          if (tableWrapper.scrollWidth > tableWrapper.clientWidth) {
+            tableWrapper.classList.add('scrollable');
+          } else {
+            tableWrapper.classList.remove('scrollable');
+          }
+        });
+      }
+
+      // Run initially and on window resize
+      checkTableScroll();
+      window.addEventListener('resize', checkTableScroll);
+    });
+  </script>
 </body>
 
 </html>
