@@ -3,6 +3,8 @@ const path = require('path');
 const { exec, spawn } = require('child_process');
 const Registry = require('winreg');
 const ConfigManager = require('./configManager');
+const os = require('os');
+const { Notification } = require('electron').remote || require('@electron/remote');
 let rootPathGlobal = '';
 class SolutionManager {
     constructor() {
@@ -11,19 +13,25 @@ class SolutionManager {
         this.currentPage = 1;
         this.solutions = [];
         this.rootPath = '';
-        this.IDE = {
-            VS2022_DEBUG: 'Visual Studio 2022 (Debug)',
-            VS2022_NO_DEBUG: 'Visual Studio 2022 (Without Debug)',
-            RIDER_DEBUG: 'Rider (Debug)',
-            RIDER_NO_DEBUG: 'Rider (Without Debug)',
-            VSCODE: 'VS Code'
-        };
+        this.env = this.loadEnvironmentConfig();
+        this.IDE = this.env.IDE;
         this.ENVIRONMENTS = {
             DEV: { name: 'Dev', branch: 'master_dev' },
             SIT: { name: 'SIT', branch: 'master_sit' },
             UAT: { name: 'UAT', branch: 'master_uat' }
         };
         this.init();
+    }
+
+    loadEnvironmentConfig() {
+        const platform = process.platform;
+        const envFile = platform === 'darwin' ? 'env.mac.json' : 'env.win.json';
+        try {
+            return JSON.parse(fs.readFileSync(path.join(__dirname, envFile), 'utf8'));
+        } catch (error) {
+            console.error(`Error loading environment config: ${error.message}`);
+            throw error;
+        }
     }
 
     init() {
@@ -58,7 +66,8 @@ class SolutionManager {
             console.log('Loading solutions...');
             const config = this.configManager.loadConfig();
             this.solutions = config.solutions || [];
-            rootPathGlobal = config.rootPath || '';
+            rootPathGlobal = this.resolvePath(config.rootPath || '');
+            console.log('Resolved root path:', rootPathGlobal);
             this.totalPages = Math.ceil(this.solutions.length / this.itemsPerPage);
             console.log(`Loaded ${this.solutions.length} solutions, ${this.totalPages} pages total`);
             this.displaySolutions();
@@ -192,8 +201,16 @@ class SolutionManager {
             }
         });
 
-        // Set default IDE based on solution type
-        select.value = solution.type === 'dotnet' ? this.IDE.VS2022_NO_DEBUG : this.IDE.VSCODE;
+        // Set default IDE based on solution type and platform
+        if (solution.type === 'dotnet') {
+            if (process.platform === 'darwin') {
+                select.value = this.IDE.RIDER_NO_DEBUG;
+            } else {
+                select.value = this.IDE.VS2022_NO_DEBUG;
+            }
+        } else {
+            select.value = this.IDE.VSCODE;
+        }
         return select;
     }
 
@@ -308,10 +325,19 @@ class SolutionManager {
 
     groupSolutionsByParent(solutions) {
         return solutions.reduce((acc, solution) => {
-            const parentDir = solution.path.split('\\')[0];
-            if (!acc[parentDir]) acc[parentDir] = [];
-            acc[parentDir].push(solution);
-            return acc;
+            try {
+                // Normalize the path and split it properly
+                const normalizedPath = path.normalize(solution.path.replace(/\\/g, '/'));
+                const parts = normalizedPath.split('/');
+                const parentDir = parts[0];
+                
+                if (!acc[parentDir]) acc[parentDir] = [];
+                acc[parentDir].push(solution);
+                return acc;
+            } catch (error) {
+                console.error('Error grouping solution:', error);
+                return acc;
+            }
         }, {});
     }
 
@@ -346,6 +372,7 @@ class SolutionManager {
                     continue;
                 }
                 const directory = this.getSolutionDirectory(solution);
+                console.log('Getting latest for directory:', directory);
 
                 // Get the environment selector for this solution
                 const envSelector = document.getElementById(`env-${this.getSolutionId(solution)}`);
@@ -361,77 +388,181 @@ class SolutionManager {
     }
 
     getSolutionDirectory(solution) {
-        let solutionPath = path.join(rootPathGlobal, solution.path);
-
-        // For .NET solutions, use the parent directory of the .sln file
-        if (solution.type === 'dotnet') {
-            return path.dirname(solutionPath);
-        }
-
-        // For Node.js, Angular, etc., use the solution path directly
-        // If the path is a file, use its directory, otherwise use the path itself
         try {
-            return fs.statSync(solutionPath).isFile() ? path.dirname(solutionPath) : solutionPath;
+            // First normalize the solution path
+            const normalizedSolutionPath = path.normalize(solution.path.replace(/\\/g, '/'));
+            // Then join with the root path
+            let fullPath = path.join(rootPathGlobal, normalizedSolutionPath);
+            console.log('Full solution path:', fullPath);
+
+            // For .NET solutions, use the parent directory of the .sln file
+            if (solution.type === 'dotnet') {
+                return path.dirname(fullPath);
+            }
+
+            // For Node.js, Angular, etc., use the solution path directly
+            try {
+                const stats = fs.statSync(fullPath);
+                return stats.isFile() ? path.dirname(fullPath) : fullPath;
+            } catch (error) {
+                console.warn(`Error checking file stats: ${error.message}`);
+                return fullPath;
+            }
         } catch (error) {
-            console.warn(`Error checking file stats: ${error.message}`);
-            return solutionPath;
+            console.error('Error in getSolutionDirectory:', error);
+            return path.join(rootPathGlobal, solution.path);
         }
     }
 
     async getLatest(directory, name, solutionType, targetBranch) {
         try {
+            console.log(`Getting latest for ${name} in directory: ${directory}`);
+            
+            // First, verify the directory exists and is a git repository
+            if (!fs.existsSync(directory)) {
+                const errorMsg = `Directory not found: ${directory}`;
+                this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
+                throw new Error(errorMsg);
+            }
+
+            // Check if it's a git repository
+            try {
+                await new Promise((resolve, reject) => {
+                    const cmd = process.platform === 'win32' ? 
+                        `cd /d "${directory}" && git rev-parse --git-dir` :
+                        `cd "${directory}" && git rev-parse --git-dir`;
+
+                    exec(cmd, {
+                        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
+                    }, (error, stdout, stderr) => {
+                        if (error) {
+                            reject(new Error(`Not a git repository or git not installed`));
+                            return;
+                        }
+                        resolve(stdout.trim());
+                    });
+                });
+            } catch (error) {
+                const errorMsg = `${directory} is not a git repository or git is not installed`;
+                this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
+                throw new Error(errorMsg);
+            }
+
             // First, try to detect the current branch
             let currentBranch;
             try {
                 currentBranch = await new Promise((resolve, reject) => {
-                    exec(`cd "${directory}" && git rev-parse --abbrev-ref HEAD`, (error, stdout, stderr) => {
+                    const cmd = process.platform === 'win32' ? 
+                        `cd /d "${directory}" && git rev-parse --abbrev-ref HEAD` :
+                        `cd "${directory}" && git rev-parse --abbrev-ref HEAD`;
+
+                    exec(cmd, {
+                        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
+                    }, (error, stdout, stderr) => {
                         if (error) {
-                            reject(error);
+                            reject(new Error(`Failed to get current branch: ${error.message}`));
                             return;
                         }
                         resolve(stdout.trim());
                     });
                 });
                 console.log(`Detected current branch: ${currentBranch}`);
+                this.showNotification('Info', `Current branch for ${name}: ${currentBranch}`, 'info');
             } catch (error) {
                 console.warn(`Could not detect current branch: ${error.message}`);
+                this.showNotification('Warning', `Could not detect current branch for ${name}, using ${targetBranch}. Error: ${error.message}`, 'warning');
                 currentBranch = targetBranch;
             }
 
             // Execute git commands with proper error handling
             await new Promise((resolve, reject) => {
-                // If we're already on the target branch, just pull. Otherwise, checkout the target branch first
-                const gitCommand = `cd "${directory}" && git fetch --all && ${currentBranch !== targetBranch ? `git checkout ${targetBranch} && ` : ''}git pull`;
+                // Construct the git command based on platform
+                const cdCommand = process.platform === 'win32' ? `cd /d "${directory}"` : `cd "${directory}"`;
+                const gitCommand = `${cdCommand} && git fetch --all && ${currentBranch !== targetBranch ? `git checkout ${targetBranch} && ` : ''}git pull`;
 
                 console.log(`Executing git command: ${gitCommand}`);
+                this.showNotification('Info', `Updating ${name} on branch ${currentBranch}...`, 'info');
 
-                exec(gitCommand, (error, stdout, stderr) => {
+                exec(gitCommand, {
+                    shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+                    maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+                }, (error, stdout, stderr) => {
                     if (error) {
+                        // Parse git error messages for better error reporting
+                        let errorMsg = '';
+                        if (stderr) {
+                            // Common git error patterns
+                            if (stderr.includes('Please commit your changes or stash them')) {
+                                errorMsg = 'You have uncommitted changes. Please commit or stash them first.';
+                            } else if (stderr.includes('Please, commit your changes or stash them')) {
+                                errorMsg = 'You have uncommitted changes. Please commit or stash them first.';
+                            } else if (stderr.includes('Authentication failed')) {
+                                errorMsg = 'Git authentication failed. Please check your credentials.';
+                            } else if (stderr.includes('Could not resolve host')) {
+                                errorMsg = 'Network error: Could not connect to remote repository.';
+                            } else if (stderr.includes('not found')) {
+                                errorMsg = `Branch '${targetBranch}' not found.`;
+                            } else {
+                                // Use the first line of stderr as it usually contains the most relevant error
+                                errorMsg = stderr.split('\n')[0];
+                            }
+                        } else {
+                            errorMsg = error.message;
+                        }
+
                         // If checkout fails, try to pull on the current branch
                         if (error.message.includes('checkout') || error.message.includes('not found')) {
                             console.warn(`Could not checkout ${targetBranch}, trying to pull on current branch ${currentBranch}`);
-                            exec(`cd "${directory}" && git pull`, (err2, stdout2, stderr2) => {
+                            this.showNotification('Warning', `Could not checkout ${targetBranch} for ${name} (${errorMsg}). Pulling current branch instead.`, 'warning');
+                            
+                            const pullCommand = `${cdCommand} && git pull`;
+                            exec(pullCommand, {
+                                shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+                                maxBuffer: 1024 * 1024 * 10
+                            }, (err2, stdout2, stderr2) => {
                                 if (err2) {
-                                    reject(err2);
+                                    let pullErrorMsg = '';
+                                    if (stderr2) {
+                                        if (stderr2.includes('Authentication failed')) {
+                                            pullErrorMsg = 'Git authentication failed. Please check your credentials.';
+                                        } else if (stderr2.includes('Could not resolve host')) {
+                                            pullErrorMsg = 'Network error: Could not connect to remote repository.';
+                                        } else {
+                                            pullErrorMsg = stderr2.split('\n')[0];
+                                        }
+                                    } else {
+                                        pullErrorMsg = err2.message;
+                                    }
+                                    this.showNotification('Error', `Failed to pull updates for ${name}: ${pullErrorMsg}`, 'error');
+                                    reject(new Error(pullErrorMsg));
                                     return;
                                 }
                                 console.log('Git pull output:', stdout2);
+                                if (stderr2) console.log('Git pull stderr:', stderr2);
+                                this.showNotification('Success', `Updated ${name} successfully on branch ${currentBranch}`, 'success');
                                 resolve(stdout2);
                             });
                             return;
                         }
-                        reject(error);
+                        this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
+                        reject(new Error(errorMsg));
                         return;
                     }
                     console.log('Git output:', stdout);
+                    if (stderr) {
+                        console.log('Git stderr:', stderr);
+                    }
+                    this.showNotification('Success', `Updated ${name} successfully on branch ${targetBranch}`, 'success');
                     resolve(stdout);
                 });
             });
-
-            this.showNotification('Success', `Updated ${name} successfully`, 'success');
         } catch (error) {
             console.error('Git error:', error);
-            this.showNotification('Error', `Failed to update ${name}: ${error.message}`, 'error');
+            // Make sure we haven't already shown this error
+            if (!error.message.includes('Failed to update')) {
+                this.showNotification('Error', `Failed to update ${name}: ${error.message}`, 'error');
+            }
+            throw error;
         }
     }
 
@@ -455,7 +586,7 @@ class SolutionManager {
                 }
 
                 const ideSelect = document.getElementById(`ide-${this.getSolutionId(solution)}`);
-                const selectedIde = ideSelect ? ideSelect.value : this.IDE.VS2022_NO_DEBUG;
+                const selectedIde = ideSelect ? ideSelect.value : this.IDE.VSCODE;
 
                 console.log(`Launching solution: ${solution.name} with IDE: ${selectedIde}`);
                 this.launchSolution(solution, selectedIde);
@@ -497,57 +628,15 @@ class SolutionManager {
     }
 
     async findVisualStudioPath() {
-        const registryPaths = [
-            {
-                key: '\\SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VS7',
-                value: '17.0',
-                arch: 'x64'
-            },
-            {
-                key: '\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\SxS\\VS7',
-                value: '17.0',
-                arch: 'x32'
-            }
-        ];
-
-        for (const regPath of registryPaths) {
-            try {
-                const reg = new Registry({
-                    hive: Registry.HKLM,
-                    key: regPath.key,
-                    arch: regPath.arch
-                });
-
-                const vsPath = await new Promise((resolve, reject) => {
-                    reg.get(regPath.value, (err, item) => {
-                        if (err) reject(err instanceof Error ? err : new Error(err.message || String(err)));
-                        else resolve(item.value);
-                    });
-                });
-
-                const devenvPath = path.join(vsPath, 'Common7', 'IDE', 'devenv.exe');
-                if (fs.existsSync(devenvPath)) {
-                    return devenvPath;
-                }
-            } catch (error) {
-                console.warn(`Failed to find VS in ${regPath.key}:`, error);
-            }
+        if (process.platform === 'darwin') {
+            throw new Error('Visual Studio is not supported on macOS');
         }
 
-        // Fallback to default paths
-        const defaultPaths = [
-            'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\IDE\\devenv.exe',
-            'C:\\Program Files\\Microsoft Visual Studio\\2022\\Preview\\Common7\\IDE\\devenv.exe',
-            'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\devenv.exe',
-            'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe'
-        ];
-
-        for (const defaultPath of defaultPaths) {
-            if (fs.existsSync(defaultPath)) {
-                return defaultPath;
+        for (const vsPath of this.env.paths.vs2022) {
+            if (fs.existsSync(vsPath)) {
+                return vsPath;
             }
         }
-
         throw new Error('Visual Studio 2022 installation not found');
     }
 
@@ -587,97 +676,39 @@ class SolutionManager {
     }
 
     async findRiderPath() {
-        try {
-            // Try to find Rider through Windows Registry
-            const registryPaths = [
-                {
-                    key: '\\SOFTWARE\\JetBrains\\Rider',
-                    arch: 'x64'
-                },
-                {
-                    key: '\\SOFTWARE\\JetBrains\\Rider',
-                    arch: 'x32'
-                }
-            ];
+        const riderPaths = this.env.paths.rider;
 
-            for (const regPath of registryPaths) {
+        for (const riderPath of riderPaths) {
+            const resolvedPath = this.resolvePath(riderPath);
+            
+            // Handle glob patterns in paths
+            if (resolvedPath.includes('*')) {
                 try {
-                    const reg = new Registry({
-                        hive: Registry.HKLM,
-                        key: regPath.key,
-                        arch: regPath.arch
-                    });
-
-                    // List all values in the key to find the latest version
-                    const items = await new Promise((resolve, reject) => {
-                        reg.values((err, items) => {
-                            if (err) reject(err);
-                            else resolve(items);
-                        });
-                    });
-
-                    if (items && items.length > 0) {
-                        // Sort items by version number (assuming version is in the name)
-                        const sortedItems = items.sort((a, b) => {
-                            const versionA = a.name.match(/\d+\.\d+/);
-                            const versionB = b.name.match(/\d+\.\d+/);
-                            if (versionA && versionB) {
-                                return parseFloat(versionB[0]) - parseFloat(versionA[0]);
-                            }
-                            return 0;
-                        });
-
-                        // Get the latest version's installation path
-                        const latestVersion = sortedItems[0];
-                        if (latestVersion) {
-                            const installPath = await new Promise((resolve, reject) => {
-                                reg.get(latestVersion.name, (err, item) => {
-                                    if (err) reject(err);
-                                    else resolve(item.value);
-                                });
-                            });
-
-                            const riderPath = path.join(installPath, 'bin', 'rider64.exe');
-                            if (fs.existsSync(riderPath)) {
-                                return riderPath;
-                            }
-                        }
+                    const { glob } = require('glob');
+                    const matches = await glob(resolvedPath);
+                    if (matches.length > 0) {
+                        // Use the most recent version (last in sorted array)
+                        const sortedMatches = matches.sort();
+                        return sortedMatches[sortedMatches.length - 1];
                     }
-                } catch (regError) {
-                    console.warn(`Registry search failed for ${regPath.key}:`, regError);
+                } catch (error) {
+                    console.warn(`Error resolving glob pattern: ${error.message}`);
                 }
+            } else if (fs.existsSync(resolvedPath)) {
+                return resolvedPath;
             }
-        } catch (error) {
-            console.warn('Error searching for Rider in registry:', error);
         }
-        return null;
+        throw new Error('JetBrains Rider installation not found');
     }
 
     async launchInRider(solutionPath, debug = false) {
         try {
-            console.log('Launching Rider:', { solutionPath, debug });
+            // Ensure the solution path is absolute and normalized
+            const absoluteSolutionPath = path.resolve(solutionPath);
+            console.log('Launching Rider:', { absoluteSolutionPath, debug });
 
-            // First try to find Rider through registry
+            // First try to find Rider through paths
             let riderPath = await this.findRiderPath();
-
-            if (!riderPath) {
-                // Fallback to common installation paths
-                const riderPaths = [
-                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.3\\bin\\rider64.exe',
-                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.2\\bin\\rider64.exe',
-                    'C:\\Program Files\\JetBrains\\JetBrains Rider 2023.1\\bin\\rider64.exe',
-                    "C:\\Users\\tahaa\\AppData\\Local\\Programs\\Rider\\bin\\rider64.exe"
-                    // Add more potential path
-                ];
-
-                for (const possiblePath of riderPaths) {
-                    if (fs.existsSync(possiblePath)) {
-                        riderPath = possiblePath;
-                        break;
-                    }
-                }
-            }
-
             if (!riderPath) {
                 throw new Error('JetBrains Rider installation not found');
             }
@@ -686,7 +717,6 @@ class SolutionManager {
 
             // Prepare launch arguments
             const args = [];
-
             if (debug) {
                 args.push('--wait');
                 args.push('--line');
@@ -695,21 +725,19 @@ class SolutionManager {
             }
 
             // Always add the solution path last
-            args.push(solutionPath);
+            args.push(absoluteSolutionPath);
 
             console.log('Launching Rider with args:', args);
 
             // Launch Rider with detached:true and stdio:ignore to prevent closing with app
             const child = spawn(riderPath, args, {
                 windowsHide: false,
-                stdio: 'ignore', // Changed from 'pipe' to 'ignore'
-                shell: true,
-                detached: true    // Ensure process is detached
+                stdio: 'ignore',
+                shell: process.platform === 'win32', // Use shell only on Windows
+                detached: true
             });
 
-            // Unref the child to allow the parent process to exit independently
             child.unref();
-
             this.showNotification('Success', 'Rider launched successfully', 'success');
         } catch (error) {
             console.error('Error launching Rider:', error);
@@ -720,15 +748,16 @@ class SolutionManager {
     async launchInVSCode(solution) {
         try {
             const dirToOpen = this.getSolutionDirectory(solution);
+            console.log('Opening VS Code in directory:', dirToOpen);
 
-            // Launch VS Code with detached process
-            const vsCodeProcess = spawn('code', [dirToOpen], {
+            // Change to the directory and launch VS Code with '.'
+            const command = `cd "${dirToOpen}" && code .`;
+            const vsCodeProcess = spawn(command, {
                 shell: true,
-                detached: true,  // Ensure detached is true
-                stdio: 'ignore'  // Changed from default to 'ignore'
+                detached: true,
+                stdio: 'ignore'
             });
 
-            // Unref to allow parent to exit independently
             vsCodeProcess.unref();
 
             // For non-dotnet solutions, run additional setup
@@ -746,13 +775,12 @@ class SolutionManager {
 
                 if (commands.length > 0) {
                     console.log('Running additional commands:', commands);
-                    const terminal = spawn('cmd.exe', ['/k', `cd "${dirToOpen}" && ${commands.join(' && ')}`], {
+                    const terminal = spawn(this.env.shell.name, [...this.env.shell.args, `cd "${dirToOpen}" && ${commands.join(' && ')}`], {
                         shell: true,
-                        detached: true,  // Ensure detached is true
-                        stdio: 'ignore'  // Changed from 'inherit' to 'ignore'
+                        detached: true,
+                        stdio: 'ignore'
                     });
 
-                    // Unref terminal too
                     terminal.unref();
                 }
             }
@@ -803,14 +831,12 @@ class SolutionManager {
                 'docker image prune -f'
             ];
 
-            // Use spawn instead of exec for better process management
-            const child = spawn('cmd.exe', ['/c', commands.join(' && ')], {
+            const child = spawn(this.env.shell.name, [...this.env.shell.args, commands.join(' && ')], {
                 shell: true,
-                detached: true,  // Set detached to true
-                stdio: 'pipe'    // Keep as pipe to capture output
+                detached: true,
+                stdio: 'pipe'
             });
 
-            // Capture output but don't keep references that prevent GC
             let stdout = '';
             let stderr = '';
 
@@ -831,13 +857,9 @@ class SolutionManager {
                     this.showNotification('Error', `Dockerization failed with code ${code}`, 'error');
                 }
 
-                // Remove references to allow garbage collection
                 stdout = null;
                 stderr = null;
             });
-
-            // No need to unref since we want to capture output
-            // But we still keep the process detached
         } catch (error) {
             console.error('Error dockerizing application:', error);
             this.showNotification('Error', `Failed to dockerize: ${error.message}`, 'error');
@@ -845,33 +867,76 @@ class SolutionManager {
     }
 
     showNotification(title, message, type = 'info') {
-        const timestamp = new Date().toISOString();
-        const logMessage = `[${timestamp}] [${type.toUpperCase()}] ${title}: ${message}`;
+        try {
+            // Log to console first
+            const timestamp = new Date().toISOString();
+            const logMessage = `[${timestamp}] [${type.toUpperCase()}] ${title}: ${message}`;
 
-        switch (type) {
-            case 'error':
-                console.error(logMessage);
-                break;
-            case 'warning':
-                console.warn(logMessage);
-                break;
-            default:
-                console.log(logMessage);
-        }
-
-        // Show system notification
-        if ('Notification' in window) {
-            try {
-                const notification = new window.Notification(title, {
-                    body: message,
-                    icon: type === 'success' ? './assets/check.png' : './assets/close.png'
-                });
-                notification.onclick = () => {
-                    notification.close();
-                };
-            } catch (error) {
-                console.error('Failed to show notification:', error);
+            switch (type) {
+                case 'error':
+                    console.error(logMessage);
+                    break;
+                case 'warning':
+                    console.warn(logMessage);
+                    break;
+                default:
+                    console.log(logMessage);
             }
+
+            // Create and show Electron notification
+            try {
+                const notification = new Notification({
+                    title: title,
+                    body: message,
+                    icon: type === 'success' ? path.join(__dirname, 'assets', 'check.png') : path.join(__dirname, 'assets', 'close.png'),
+                    silent: false
+                });
+
+                notification.show();
+
+                // Auto close after 4 seconds
+                setTimeout(() => notification.close(), 4000);
+            } catch (notificationError) {
+                console.error('Failed to show Electron notification:', notificationError);
+            }
+        } catch (error) {
+            console.error('Error in showNotification:', error);
+        }
+    }
+
+    resolvePath(inputPath) {
+        if (!inputPath) return '';
+        
+        try {
+            let resolvedPath = inputPath;
+            
+            // Expand ~ to home directory
+            if (resolvedPath.startsWith('~')) {
+                resolvedPath = path.join(os.homedir(), resolvedPath.slice(1));
+            }
+            
+            // Handle environment variables
+            if (process.platform === 'win32') {
+                resolvedPath = resolvedPath.replace(/%([^%]+)%/g, (_, n) => process.env[n] || '');
+            } else {
+                resolvedPath = resolvedPath
+                    .replace(/\$HOME/g, os.homedir())
+                    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, n) => process.env[n] || '');
+            }
+
+            // Convert to absolute path and normalize
+            resolvedPath = path.resolve(resolvedPath);
+            
+            // Ensure the path exists
+            if (!fs.existsSync(resolvedPath)) {
+                console.warn(`Path does not exist: ${resolvedPath}`);
+            }
+            
+            console.log('Resolved path:', resolvedPath);
+            return resolvedPath;
+        } catch (error) {
+            console.error('Error resolving path:', error);
+            return inputPath;
         }
     }
 }

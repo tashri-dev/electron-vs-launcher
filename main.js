@@ -1,11 +1,12 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+require('@electron/remote/main').initialize();
 
 function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
         height: 800,
-        icon: path.join(__dirname, 'assets', 'png', '256x256.png'), 
+        icon: path.join(__dirname, 'assets', 'MyIcon.iconset', 'icon_256x256.png'), 
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -14,6 +15,7 @@ function createWindow() {
         title: "Make it Easy - Solution Launcher"
     });
 
+    require('@electron/remote/main').enable(win.webContents);
     win.loadFile('index.html');
 
     if (process.env.NODE_ENV === 'development') {

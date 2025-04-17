@@ -182,6 +182,11 @@ Common issues and solutions:
    - Verify solution file integrity
 
 ## Publishing the app
+   ### windows
    ```bash
    npx electron-packager . "make it easy" --platform=win32 --arch=x64 --icon=assets/icons/win/app.ico --overwrite
+   ```
+   ### MacOS 
+   ```bash
+   npx electron-packager . "Make it Easy" --platform=darwin --arch=arm64,x64 --icon=assets/icons/macos/app.icns --overwrite
    ```

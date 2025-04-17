@@ -100,49 +100,99 @@
               </div>
 
               <!-- Add New Solution Section -->
-              <div class="add-solution-form">
-                <h6 class="mb-3">Add New Solution</h6>
-                <form id="addSolutionForm">
-                  <div class="row g-3">
-                    <div class="col-md-6">
-                      <label class="form-label">Solution Name</label>
-                      <input type="text" class="form-control" name="name" required>
+              <div class="add-solution-section">
+                <h3 class="section-title">Add New Solution</h3>
+                <hr class="section-divider">
+                
+                <!-- Required Fields Section -->
+                <div class="required-fields">
+                  <!-- Row 1: Required fields -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="solutionName" class="form-label">Solution Name <span class="required-mark">*</span></label>
+                      <input type="text" id="solutionName" name="name" class="form-control" placeholder="Enter solution name" required>
                     </div>
-                    <div class="col-md-6">
-                      <label class="form-label">Relative Path</label>
-                      <input type="text" class="form-control" name="path" required>
+                    
+                    <div class="form-group">
+                      <label for="solutionPath" class="form-label">Relative Path <span class="required-mark">*</span></label>
+                      <input type="text" id="solutionPath" name="path" class="form-control" placeholder="e.g., ProjectName/Solution.sln" required>
                     </div>
-                    <div class="col-md-4">
-                      <label class="form-label">Type</label>
-                      <select class="form-select" name="type" required>
-                        <option value="dotnet">Dotnet</option>
-                        <option value="nodejs">NodeJS</option>
+                  </div>
+                  
+                  <!-- Row 2: Solution Type (Required) -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="solutionType" class="form-label">Solution Type <span class="required-mark">*</span></label>
+                      <select id="solutionType" name="type" class="form-select" required>
+                        <option value="">Select type</option>
+                        <option value="dotnet">.NET</option>
+                        <option value="nodejs">Node.js</option>
                         <option value="angular">Angular</option>
                       </select>
                     </div>
-                    <div class="col-md-4">
-                      <label class="form-label">Docker Port (Optional)</label>
-                      <input type="number" class="form-control" name="dockerPort">
+                    
+                    <!-- Placeholder for balance -->
+                    <div class="form-group"></div>
+                  </div>
+                </div>
+                
+                <!-- Optional Docker Settings Card -->
+                <div class="optional-section-card">
+                  <div class="optional-tag">Optional</div>
+                  <h4 class="optional-section-title">Docker Settings</h4>
+                  
+                  <!-- Row 3: Docker Port and Container Name -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="dockerPort" class="form-label">Docker Port</label>
+                      <input type="number" id="dockerPort" name="dockerPort" class="form-control" placeholder="e.g., 3000">
+                      <small class="form-text">Port for Docker container</small>
                     </div>
-                    <div class="col-md-4">
-                      <label class="form-label">Container Name (Optional)</label>
-                      <input type="text" class="form-control" name="imageContainerName">
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label">Migrator Path (Optional)</label>
-                      <input type="text" class="form-control" name="migratorPath">
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label">Context Folder (Optional)</label>
-                      <input type="text" class="form-control" name="contextFolder">
-                    </div>
-                    <div class="col-12">
-                      <button type="submit" class="btn btn-success">
-                        <i class="fa fa-plus me-2"></i>Add Solution
-                      </button>
+                    
+                    <div class="form-group">
+                      <label for="containerName" class="form-label">Container Name</label>
+                      <input type="text" id="containerName" name="imageContainerName" class="form-control" placeholder="e.g., my-app-container">
+                      <small class="form-text">Name for Docker container</small>
                     </div>
                   </div>
-                </form>
+                  
+                  <!-- Row 4: Context Folder -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="contextFolder" class="form-label">Context Folder</label>
+                      <input type="text" id="contextFolder" name="contextFolder" class="form-control" placeholder="e.g., Docker/context">
+                      <small class="form-text">Docker build context folder</small>
+                    </div>
+                    
+                    <!-- Placeholder for balance -->
+                    <div class="form-group"></div>
+                  </div>
+                </div>
+                
+                <!-- Optional Database Settings Card -->
+                <div class="optional-section-card">
+                  <div class="optional-tag">Optional</div>
+                  <h4 class="optional-section-title">Database Settings</h4>
+                  
+                  <!-- Row 5: Migrator Path -->
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="migratorPath" class="form-label">Migrator Path</label>
+                      <input type="text" id="migratorPath" name="migratorPath" class="form-control" placeholder="e.g., Database/Migrations">
+                      <small class="form-text">Path to database migrations</small>
+                    </div>
+                    
+                    <!-- Placeholder for balance -->
+                    <div class="form-group"></div>
+                  </div>
+                </div>
+                
+                <!-- Add Button -->
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-success">
+                    <i class="fa fa-plus me-2"></i>Add Solution
+                  </button>
+                </div>
               </div>
 
               <!-- Current Configuration Section -->

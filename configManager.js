@@ -1,12 +1,19 @@
 const fs = require('fs');
 const path = require('path');
+const { app } = require('electron').remote || require('@electron/remote');
 
 class ConfigManager {
     constructor() {
         // Initialize paths
-        this.appDir = __dirname;
-        this.configPath = './config.json';
-        this.templatePath = './config.template.json';
+        this.appDir = app.getPath('userData'); // Use Electron's user data directory
+        this.configPath = path.join(this.appDir, 'config.json');
+        this.templatePath = path.join(__dirname, 'config.template.json');
+        
+        // Ensure user data directory exists
+        if (!fs.existsSync(this.appDir)) {
+            fs.mkdirSync(this.appDir, { recursive: true });
+        }
+        
         // Ensure config exists
         this.initializeConfig();
     }
@@ -14,6 +21,7 @@ class ConfigManager {
     initializeConfig() {
         try {
             if (!fs.existsSync(this.configPath)) {
+                console.log('Config file not found, creating from template...');
                 const defaultConfig = this.createConfigFromTemplate();
                 this.saveConfig(defaultConfig);
             }
@@ -33,7 +41,20 @@ class ConfigManager {
             // Read existing config
             const configData = fs.readFileSync(this.configPath, 'utf8');
             const config = JSON.parse(configData);
-            console.log('Successfully loaded config:', config);
+            
+            // Normalize paths in the config
+            if (config.rootPath) {
+                config.rootPath = this.normalizePath(config.rootPath);
+            }
+            if (config.solutions) {
+                config.solutions = config.solutions.map(solution => ({
+                    ...solution,
+                    path: this.normalizePath(solution.path),
+                    migratorPath: solution.migratorPath ? this.normalizePath(solution.migratorPath) : solution.migratorPath
+                }));
+            }
+            
+            console.log('Successfully loaded config from:', this.configPath);
             return config;
         } catch (error) {
             console.error('Error loading config:', error);
@@ -50,16 +71,16 @@ class ConfigManager {
 
             // Try to load from template if it exists
             if (fs.existsSync(this.templatePath)) {
-                console.log('Using template file');
+                console.log('Using template file from:', this.templatePath);
                 const templateData = fs.readFileSync(this.templatePath, 'utf8');
                 const templateConfig = JSON.parse(templateData);
-                fs.writeFileSync(this.configPath, JSON.stringify(templateConfig, null, 2));
+                this.saveConfig(templateConfig);
                 return templateConfig;
             }
 
             // Create default config if no template exists
-            console.log('No template found, creating default config');
-            fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+            console.log('No template found, creating default config at:', this.configPath);
+            this.saveConfig(defaultConfig);
             return defaultConfig;
         } catch (error) {
             console.error('Error creating config from template:', error);
@@ -74,12 +95,52 @@ class ConfigManager {
                 throw new Error('Invalid configuration structure');
             }
 
+            // Normalize paths before saving
+            const normalizedConfig = {
+                ...config,
+                rootPath: this.normalizePath(config.rootPath),
+                solutions: config.solutions.map(solution => ({
+                    ...solution,
+                    path: this.normalizePath(solution.path),
+                    migratorPath: solution.migratorPath ? this.normalizePath(solution.migratorPath) : solution.migratorPath
+                }))
+            };
+
+            // Ensure directory exists
+            const configDir = path.dirname(this.configPath);
+            if (!fs.existsSync(configDir)) {
+                fs.mkdirSync(configDir, { recursive: true });
+            }
+
             // Save config to file
-            fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
-            console.log('Config saved successfully:', config);
+            fs.writeFileSync(this.configPath, JSON.stringify(normalizedConfig, null, 2));
+            console.log('Config saved successfully to:', this.configPath);
             return true;
         } catch (error) {
             console.error('Error saving config:', error);
+            return false;
+        }
+    }
+
+    importConfig(configData) {
+        try {
+            // Parse the imported config
+            let importedConfig;
+            if (typeof configData === 'string') {
+                importedConfig = JSON.parse(configData);
+            } else {
+                importedConfig = configData;
+            }
+
+            // Validate the imported config
+            if (!this.validateConfig(importedConfig)) {
+                throw new Error('Invalid imported configuration structure');
+            }
+
+            // Save the imported config
+            return this.saveConfig(importedConfig);
+        } catch (error) {
+            console.error('Error importing config:', error);
             return false;
         }
     }
@@ -186,6 +247,54 @@ class ConfigManager {
             return this.saveConfig(emptyConfig);
         } catch (error) {
             console.error('Error clearing config:', error);
+            return false;
+        }
+    }
+
+    normalizePath(inputPath) {
+        if (!inputPath) return '';
+        
+        // Convert Windows-style paths to forward slashes
+        let normalizedPath = inputPath.replace(/\\/g, '/');
+        
+        // Remove any duplicate slashes
+        normalizedPath = normalizedPath.replace(/\/+/g, '/');
+        
+        // Remove trailing slash if present (unless it's just "/")
+        if (normalizedPath.length > 1 && normalizedPath.endsWith('/')) {
+            normalizedPath = normalizedPath.slice(0, -1);
+        }
+        
+        return normalizedPath;
+    }
+
+    getConfigPath() {
+        return this.configPath;
+    }
+
+    backupConfig() {
+        try {
+            const backupPath = `${this.configPath}.backup`;
+            fs.copyFileSync(this.configPath, backupPath);
+            console.log('Config backup created at:', backupPath);
+            return true;
+        } catch (error) {
+            console.error('Error creating config backup:', error);
+            return false;
+        }
+    }
+
+    restoreBackup() {
+        try {
+            const backupPath = `${this.configPath}.backup`;
+            if (fs.existsSync(backupPath)) {
+                fs.copyFileSync(backupPath, this.configPath);
+                console.log('Config restored from backup');
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error restoring config from backup:', error);
             return false;
         }
     }
