@@ -330,7 +330,7 @@ class SolutionManager {
                 const normalizedPath = path.normalize(solution.path.replace(/\\/g, '/'));
                 const parts = normalizedPath.split('/');
                 const parentDir = parts[0];
-                
+
                 if (!acc[parentDir]) acc[parentDir] = [];
                 acc[parentDir].push(solution);
                 return acc;
@@ -417,18 +417,16 @@ class SolutionManager {
     async getLatest(directory, name, solutionType, targetBranch) {
         try {
             console.log(`Getting latest for ${name} in directory: ${directory}`);
-            
+
             // First, verify the directory exists and is a git repository
             if (!fs.existsSync(directory)) {
-                const errorMsg = `Directory not found: ${directory}`;
-                this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
-                throw new Error(errorMsg);
+                throw new Error(`Directory not found: ${directory}`);
             }
 
             // Check if it's a git repository
             try {
                 await new Promise((resolve, reject) => {
-                    const cmd = process.platform === 'win32' ? 
+                    const cmd = process.platform === 'win32' ?
                         `cd /d "${directory}" && git rev-parse --git-dir` :
                         `cd "${directory}" && git rev-parse --git-dir`;
 
@@ -443,16 +441,14 @@ class SolutionManager {
                     });
                 });
             } catch (error) {
-                const errorMsg = `${directory} is not a git repository or git is not installed`;
-                this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
-                throw new Error(errorMsg);
+                throw new Error(`${directory} is not a git repository or git is not installed`);
             }
 
             // First, try to detect the current branch
             let currentBranch;
             try {
                 currentBranch = await new Promise((resolve, reject) => {
-                    const cmd = process.platform === 'win32' ? 
+                    const cmd = process.platform === 'win32' ?
                         `cd /d "${directory}" && git rev-parse --abbrev-ref HEAD` :
                         `cd "${directory}" && git rev-parse --abbrev-ref HEAD`;
 
@@ -467,10 +463,8 @@ class SolutionManager {
                     });
                 });
                 console.log(`Detected current branch: ${currentBranch}`);
-                this.showNotification('Info', `Current branch for ${name}: ${currentBranch}`, 'info');
             } catch (error) {
                 console.warn(`Could not detect current branch: ${error.message}`);
-                this.showNotification('Warning', `Could not detect current branch for ${name}, using ${targetBranch}. Error: ${error.message}`, 'warning');
                 currentBranch = targetBranch;
             }
 
@@ -481,7 +475,6 @@ class SolutionManager {
                 const gitCommand = `${cdCommand} && git fetch --all && ${currentBranch !== targetBranch ? `git checkout ${targetBranch} && ` : ''}git pull`;
 
                 console.log(`Executing git command: ${gitCommand}`);
-                this.showNotification('Info', `Updating ${name} on branch ${currentBranch}...`, 'info');
 
                 exec(gitCommand, {
                     shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
@@ -513,8 +506,7 @@ class SolutionManager {
                         // If checkout fails, try to pull on the current branch
                         if (error.message.includes('checkout') || error.message.includes('not found')) {
                             console.warn(`Could not checkout ${targetBranch}, trying to pull on current branch ${currentBranch}`);
-                            this.showNotification('Warning', `Could not checkout ${targetBranch} for ${name} (${errorMsg}). Pulling current branch instead.`, 'warning');
-                            
+
                             const pullCommand = `${cdCommand} && git pull`;
                             exec(pullCommand, {
                                 shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
@@ -533,18 +525,15 @@ class SolutionManager {
                                     } else {
                                         pullErrorMsg = err2.message;
                                     }
-                                    this.showNotification('Error', `Failed to pull updates for ${name}: ${pullErrorMsg}`, 'error');
                                     reject(new Error(pullErrorMsg));
                                     return;
                                 }
                                 console.log('Git pull output:', stdout2);
                                 if (stderr2) console.log('Git pull stderr:', stderr2);
-                                this.showNotification('Success', `Updated ${name} successfully on branch ${currentBranch}`, 'success');
                                 resolve(stdout2);
                             });
                             return;
                         }
-                        this.showNotification('Error', `Failed to update ${name}: ${errorMsg}`, 'error');
                         reject(new Error(errorMsg));
                         return;
                     }
@@ -552,16 +541,14 @@ class SolutionManager {
                     if (stderr) {
                         console.log('Git stderr:', stderr);
                     }
-                    this.showNotification('Success', `Updated ${name} successfully on branch ${targetBranch}`, 'success');
                     resolve(stdout);
                 });
             });
+
+            this.showNotification('Success', `Updated ${name} successfully on branch ${targetBranch}`, 'success');
         } catch (error) {
             console.error('Git error:', error);
-            // Make sure we haven't already shown this error
-            if (!error.message.includes('Failed to update')) {
-                this.showNotification('Error', `Failed to update ${name}: ${error.message}`, 'error');
-            }
+            this.showNotification('Error', `Failed to update ${name}: ${error.message}`, 'error');
             throw error;
         }
     }
@@ -680,7 +667,7 @@ class SolutionManager {
 
         for (const riderPath of riderPaths) {
             const resolvedPath = this.resolvePath(riderPath);
-            
+
             // Handle glob patterns in paths
             if (resolvedPath.includes('*')) {
                 try {
@@ -795,12 +782,29 @@ class SolutionManager {
     updateDb(migratorPath) {
         try {
             console.log('Running database update:', migratorPath);
+
+            // Check if migrator path exists
+            if (!fs.existsSync(migratorPath)) {
+                throw new Error(`Migrator project not found at: ${migratorPath}`);
+            }
+
+            // Try to find dotnet in configured paths
+            let dotnetPath = 'dotnet';
+            for (const path of this.env.paths.dotnet) {
+                const resolvedPath = this.resolvePath(path);
+                if (fs.existsSync(resolvedPath)) {
+                    dotnetPath = resolvedPath;
+                    break;
+                }
+            }
+
+            console.log('Using dotnet path:', dotnetPath);
             const args = ['run', '--project', migratorPath];
 
-            const child = spawn('dotnet', args, {
+            const child = spawn(dotnetPath, args, {
                 shell: true,
-                detached: false, // Keep this false since we want to wait for DB update to complete
-                stdio: 'inherit'  // Keep this as 'inherit' so user can see output
+                detached: false,
+                stdio: 'inherit'
             });
 
             child.on('error', (error) => {
@@ -812,7 +816,10 @@ class SolutionManager {
                 if (code === 0) {
                     this.showNotification('Success', 'Database updated successfully', 'success');
                 } else {
-                    this.showNotification('Error', `Database update failed with code ${code}`, 'error');
+                    const errorMsg = code === 127 ?
+                        'dotnet command not found. Please ensure .NET SDK is installed and in PATH' :
+                        `Database update failed with code ${code}`;
+                    this.showNotification('Error', errorMsg, 'error');
                 }
             });
         } catch (error) {
@@ -906,15 +913,15 @@ class SolutionManager {
 
     resolvePath(inputPath) {
         if (!inputPath) return '';
-        
+
         try {
             let resolvedPath = inputPath;
-            
+
             // Expand ~ to home directory
             if (resolvedPath.startsWith('~')) {
                 resolvedPath = path.join(os.homedir(), resolvedPath.slice(1));
             }
-            
+
             // Handle environment variables
             if (process.platform === 'win32') {
                 resolvedPath = resolvedPath.replace(/%([^%]+)%/g, (_, n) => process.env[n] || '');
@@ -926,12 +933,12 @@ class SolutionManager {
 
             // Convert to absolute path and normalize
             resolvedPath = path.resolve(resolvedPath);
-            
+
             // Ensure the path exists
             if (!fs.existsSync(resolvedPath)) {
                 console.warn(`Path does not exist: ${resolvedPath}`);
             }
-            
+
             console.log('Resolved path:', resolvedPath);
             return resolvedPath;
         } catch (error) {
