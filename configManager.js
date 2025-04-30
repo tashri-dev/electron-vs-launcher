@@ -1,32 +1,75 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron').remote || require('@electron/remote');
+const os = require('os');
 
 class ConfigManager {
     constructor() {
         // Initialize paths
-        this.appDir = app.getPath('userData'); // Use Electron's user data directory
+        this.appDir = this.getAppDataPath();
         this.configPath = path.join(this.appDir, 'config.json');
         this.templatePath = path.join(__dirname, 'config.template.json');
-        
+
         // Ensure user data directory exists
         if (!fs.existsSync(this.appDir)) {
             fs.mkdirSync(this.appDir, { recursive: true });
         }
-        
+
         // Ensure config exists
         this.initializeConfig();
     }
 
+    getAppDataPath() {
+        try {
+            // Get app name from package.json
+            const packageJson = require('./package.json');
+            const appName = packageJson.build.productName;
+
+            // In development, use electron's userData
+            if (process.env.NODE_ENV === 'development') {
+                return app.getPath('userData');
+            }
+
+            // In production, use platform-specific paths
+            const platform = process.platform;
+
+            switch (platform) {
+                case 'darwin': // macOS
+                    return path.join(os.homedir(), 'Library', 'Application Support', appName);
+                case 'win32': // Windows
+                    return path.join(process.env.APPDATA || os.homedir(), appName);
+                case 'linux': // Linux
+                    return path.join(os.homedir(), '.config', appName.toLowerCase().replace(/ /g, '-'));
+                default:
+                    return app.getPath('userData');
+            }
+        } catch (error) {
+            console.error('Error getting app data path:', error);
+            // Fallback to electron's userData path
+            return app.getPath('userData');
+        }
+    }
+
     initializeConfig() {
         try {
+            console.log('Initializing config in directory:', this.appDir);
+            console.log('Config path:', this.configPath);
+
             if (!fs.existsSync(this.configPath)) {
                 console.log('Config file not found, creating from template...');
                 const defaultConfig = this.createConfigFromTemplate();
                 this.saveConfig(defaultConfig);
+            } else {
+                console.log('Existing config file found');
             }
         } catch (error) {
             console.error('Error initializing config:', error);
+            console.error('Error details:', {
+                appDir: this.appDir,
+                configPath: this.configPath,
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 
@@ -41,7 +84,7 @@ class ConfigManager {
             // Read existing config
             const configData = fs.readFileSync(this.configPath, 'utf8');
             const config = JSON.parse(configData);
-            
+
             // Normalize paths in the config
             if (config.rootPath) {
                 config.rootPath = this.normalizePath(config.rootPath);
@@ -53,7 +96,7 @@ class ConfigManager {
                     migratorPath: solution.migratorPath ? this.normalizePath(solution.migratorPath) : solution.migratorPath
                 }));
             }
-            
+
             console.log('Successfully loaded config from:', this.configPath);
             return config;
         } catch (error) {
@@ -109,15 +152,22 @@ class ConfigManager {
             // Ensure directory exists
             const configDir = path.dirname(this.configPath);
             if (!fs.existsSync(configDir)) {
+                console.log('Creating config directory:', configDir);
                 fs.mkdirSync(configDir, { recursive: true });
             }
 
             // Save config to file
+            console.log('Saving config to:', this.configPath);
             fs.writeFileSync(this.configPath, JSON.stringify(normalizedConfig, null, 2));
-            console.log('Config saved successfully to:', this.configPath);
+            console.log('Config saved successfully');
             return true;
         } catch (error) {
             console.error('Error saving config:', error);
+            console.error('Error details:', {
+                configPath: this.configPath,
+                error: error.message,
+                stack: error.stack
+            });
             return false;
         }
     }
@@ -253,18 +303,18 @@ class ConfigManager {
 
     normalizePath(inputPath) {
         if (!inputPath) return '';
-        
+
         // Convert Windows-style paths to forward slashes
         let normalizedPath = inputPath.replace(/\\/g, '/');
-        
+
         // Remove any duplicate slashes
         normalizedPath = normalizedPath.replace(/\/+/g, '/');
-        
+
         // Remove trailing slash if present (unless it's just "/")
         if (normalizedPath.length > 1 && normalizedPath.endsWith('/')) {
             normalizedPath = normalizedPath.slice(0, -1);
         }
-        
+
         return normalizedPath;
     }
 

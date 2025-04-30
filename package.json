@@ -1,36 +1,96 @@
 {
-  "name": "easy-launcher",
+  "name": "amwal-pay-launcher",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "start:dev": "NODE_ENV=development electron .",
+    "start:prod": "NODE_ENV=production electron .",
+    "build": "electron-builder build",
+    "build:mac": "electron-builder build --mac",
+    "build:mac:dmg": "electron-builder build --mac dmg",
+    "build:win": "electron-builder build --win",
+    "build:win:portable": "electron-builder build --win portable",
+    "build:win:installer": "electron-builder build --win nsis",
+    "build:linux": "electron-builder build --linux",
+    "build:linux:appimage": "electron-builder build --linux AppImage",
+    "build:linux:deb": "electron-builder build --linux deb",
+    "build:all": "electron-builder build -mwl"
   },
   "build": {
-    "appId": "your.app.id",
-    "directories": {
-      "output": "dist"
+    "appId": "com.yourcompany.makeiteasy",
+    "productName": "Amwal Pay Launcher",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [ "dmg" ],
+      "icon": "assets/icons/macos/app.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "win": {
-      "icon": "./assets/apg.png",
-      "title": "Easy launcher",
-      "msi": true
-    },
-    "mac": {
-      "icon": "./assets/MyIcon.iconset/icon_256x256.png"
+      "icon": "assets/icons/win/app.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [ "x64" ]
+        },
+        {
+          "target": "portable",
+          "arch": [ "x64" ]
+        }
+      ]
     },
     "linux": {
-      "icon": "./assets/favicon.ico"
+      "icon": "assets/icons/png",
+      "target": [ "AppImage", "deb" ],
+      "category": "Development"
+    },
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
     }
   },
-  "keywords": [],
+  "keywords": [ ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
+    "electron-builder": "^24.13.3",
     "typescript": "^5.3.3"
   },
   "dependencies": {

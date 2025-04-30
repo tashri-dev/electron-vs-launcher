@@ -262,7 +262,7 @@ class SolutionManager {
             const updateDbBtn = document.createElement('button');
             updateDbBtn.classList.add('btn', 'btn-warning', 'btn-sm', 'btn-priority-medium');
             updateDbBtn.textContent = 'Update DB';
-            updateDbBtn.onclick = () => this.updateDb(path.join(rootPathGlobal, solution.migratorPath));
+            updateDbBtn.onclick = () => this.updateDb(solution);
             container.appendChild(updateDbBtn);
         }
 
@@ -365,24 +365,31 @@ class SolutionManager {
             }
 
             for (const checkbox of selectedCheckboxes) {
-                const solutionPath = checkbox.value;
-                const solution = this.solutions.find(s => s.path === solutionPath);
-                if (!solution) {
-                    console.error(`Solution not found for path: ${solutionPath}`);
+                try {
+                    const solutionPath = checkbox.value;
+                    const solution = this.solutions.find(s => s.path === solutionPath);
+                    if (!solution) {
+                        console.error(`Solution not found for path: ${solutionPath}`);
+                        continue;
+                    }
+                    const directory = this.getSolutionDirectory(solution);
+                    console.log('Getting latest for directory:', directory);
+
+                    // Get the environment selector for this solution
+                    const envSelector = document.getElementById(`env-${this.getSolutionId(solution)}`);
+                    const selectedEnv = envSelector ? envSelector.value : 'DEV';
+                    const targetBranch = this.ENVIRONMENTS[selectedEnv].branch;
+
+                    await this.getLatest(directory, solution.name, solution.type, targetBranch);
+                } catch (error) {
+                    console.error(`Error updating solution ${checkbox.value}:`, error);
+                    this.showNotification('Error', `Failed to update ${checkbox.value}: ${error.message}`, 'error');
+                    // Continue with next solution
                     continue;
                 }
-                const directory = this.getSolutionDirectory(solution);
-                console.log('Getting latest for directory:', directory);
-
-                // Get the environment selector for this solution
-                const envSelector = document.getElementById(`env-${this.getSolutionId(solution)}`);
-                const selectedEnv = envSelector ? envSelector.value : 'DEV';
-                const targetBranch = this.ENVIRONMENTS[selectedEnv].branch;
-
-                await this.getLatest(directory, solution.name, solution.type, targetBranch);
             }
         } catch (error) {
-            console.error('Error updating selected solutions:', error);
+            console.error('Error in getLatestForSelected:', error);
             this.showNotification('Error', `Operation failed: ${error.message}`, 'error');
         }
     }
@@ -737,91 +744,160 @@ class SolutionManager {
             const dirToOpen = this.getSolutionDirectory(solution);
             console.log('Opening VS Code in directory:', dirToOpen);
 
-            // Change to the directory and launch VS Code with '.'
-            const command = `cd "${dirToOpen}" && code .`;
-            const vsCodeProcess = spawn(command, {
+            // Get VS Code path from environment config
+            let vscodePath = 'code'; // default fallback
+            if (process.platform === 'darwin' && this.env.paths.vscode) {
+                // Try each possible VS Code path
+                for (const possiblePath of this.env.paths.vscode) {
+                    const resolvedPath = possiblePath.replace(/^~/, os.homedir());
+                    if (fs.existsSync(resolvedPath)) {
+                        vscodePath = resolvedPath;
+                        break;
+                    }
+                }
+            }
+
+            console.log('Using VS Code path:', vscodePath);
+
+            // Launch VS Code
+            const vsCodeProcess = spawn(vscodePath, [dirToOpen], {
                 shell: true,
                 detached: true,
                 stdio: 'ignore'
             });
-
             vsCodeProcess.unref();
 
-            // For non-dotnet solutions, run additional setup
+            // For non-dotnet solutions, run additional setup in a new terminal
             if (solution.type !== 'dotnet') {
-                const commands = [];
+                // Wait for VS Code to open
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                let commands = [];
+                const packageManager = await this.detectPackageManager(dirToOpen);
 
                 switch (solution.type) {
                     case 'angular':
-                        commands.push('yarn', 'ng serve');
+                        commands = [
+                            `cd "${dirToOpen}"`,
+                            `${packageManager} install`,
+                            'npx ng serve'
+                        ];
                         break;
                     case 'nodejs':
-                        commands.push('npm i', 'npm run start');
+                        commands = [
+                            `cd "${dirToOpen}"`,
+                            `${packageManager} install`,
+                            `${packageManager} run start`
+                        ];
                         break;
                 }
 
                 if (commands.length > 0) {
                     console.log('Running additional commands:', commands);
-                    const terminal = spawn(this.env.shell.name, [...this.env.shell.args, `cd "${dirToOpen}" && ${commands.join(' && ')}`], {
-                        shell: true,
-                        detached: true,
-                        stdio: 'ignore'
-                    });
 
-                    terminal.unref();
+                    // Platform-specific command joining
+                    const commandSeparator = process.platform === 'win32' ? ' && ' : ' && ';
+                    const fullCommand = commands.join(commandSeparator);
+
+                    if (process.platform === 'win32') {
+                        // For Windows, open a new Command Prompt
+                        spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', fullCommand], {
+                            shell: true,
+                            detached: true,
+                            stdio: 'ignore'
+                        }).unref();
+                    } else {
+                        // For macOS/Linux, open a new terminal window
+                        const terminalApp = process.platform === 'darwin' ? 'Terminal' : 'gnome-terminal';
+                        if (process.platform === 'darwin') {
+                            const osascriptCommand = `tell application "Terminal"
+                                do script "${fullCommand}"
+                                activate
+                            end tell`;
+                            spawn('osascript', ['-e', osascriptCommand], {
+                                shell: true,
+                                detached: true,
+                                stdio: 'ignore'
+                            }).unref();
+                        } else {
+                            // Linux
+                            spawn('gnome-terminal', ['--', 'bash', '-c', `${fullCommand}; exec bash`], {
+                                shell: true,
+                                detached: true,
+                                stdio: 'ignore'
+                            }).unref();
+                        }
+                    }
                 }
             }
 
-            this.showNotification('Success', `${solution.type === 'dotnet' ? 'VS Code' : 'Development environment'} launched successfully`, 'success');
+            this.showNotification('Success', `Development environment launched for ${solution.name}`, 'success');
         } catch (error) {
             console.error('Error launching VS Code:', error);
-            this.showNotification('Error', `Failed to launch VS Code: ${error.message}`, 'error');
+            this.showNotification('Error', `Failed to launch development environment: ${error.message}`, 'error');
         }
     }
 
-    updateDb(migratorPath) {
+    async detectPackageManager(directory) {
         try {
-            console.log('Running database update:', migratorPath);
+            // Check for yarn.lock
+            if (fs.existsSync(path.join(directory, 'yarn.lock'))) {
+                return 'yarn';
+            }
+            // Check for pnpm-lock.yaml
+            if (fs.existsSync(path.join(directory, 'pnpm-lock.yaml'))) {
+                return 'pnpm';
+            }
+            // Default to npm
+            return 'npm';
+        } catch (error) {
+            console.warn('Error detecting package manager:', error);
+            return 'npm';
+        }
+    }
 
-            // Check if migrator path exists
+    async updateDb(solution) {
+        try {
+            const directory = this.getSolutionDirectory(solution);
+            const migratorPath = path.join(directory, 'Database', 'Migrator', 'Migrator.csproj');
+
             if (!fs.existsSync(migratorPath)) {
                 throw new Error(`Migrator project not found at: ${migratorPath}`);
             }
 
-            // Try to find dotnet in configured paths
+            // Find dotnet executable
             let dotnetPath = 'dotnet';
-            for (const path of this.env.paths.dotnet) {
-                const resolvedPath = this.resolvePath(path);
-                if (fs.existsSync(resolvedPath)) {
-                    dotnetPath = resolvedPath;
+            const possiblePaths = [
+                '/usr/local/bin/dotnet',
+                '/opt/dotnet/dotnet',
+                '/usr/bin/dotnet',
+                process.env.DOTNET_ROOT ? path.join(process.env.DOTNET_ROOT, 'dotnet') : null
+            ].filter(Boolean);
+
+            for (const possiblePath of possiblePaths) {
+                if (fs.existsSync(possiblePath)) {
+                    dotnetPath = possiblePath;
                     break;
                 }
             }
 
             console.log('Using dotnet path:', dotnetPath);
-            const args = ['run', '--project', migratorPath];
+            console.log('Migrator path:', migratorPath);
 
-            const child = spawn(dotnetPath, args, {
-                shell: true,
-                detached: false,
-                stdio: 'inherit'
-            });
+            const command = `${dotnetPath} run --project "${migratorPath}"`;
+            console.log('Executing command:', command);
 
-            child.on('error', (error) => {
-                console.error('Database update error:', error);
-                this.showNotification('Error', `Failed to update database: ${error.message}`, 'error');
-            });
+            const { stdout, stderr } = await execAsync(command);
 
-            child.on('exit', (code) => {
-                if (code === 0) {
-                    this.showNotification('Success', 'Database updated successfully', 'success');
-                } else {
-                    const errorMsg = code === 127 ?
-                        'dotnet command not found. Please ensure .NET SDK is installed and in PATH' :
-                        `Database update failed with code ${code}`;
-                    this.showNotification('Error', errorMsg, 'error');
+            if (stderr) {
+                console.error('Migration stderr:', stderr);
+                if (!stderr.includes('Build succeeded')) {
+                    throw new Error(`Migration failed: ${stderr}`);
                 }
-            });
+            }
+
+            console.log('Migration stdout:', stdout);
+            this.showNotification('Success', `Database updated successfully for ${solution.name}`, 'success');
         } catch (error) {
             console.error('Error updating database:', error);
             this.showNotification('Error', `Failed to update database: ${error.message}`, 'error');
