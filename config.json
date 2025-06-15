@@ -1,18 +1,18 @@
 {
-  "rootPath": "~/Work/sc",
+  "rootPath": "~/Work",
   "solutions": [
     {
       "name": "APG Membership",
-      "path": "APG/APG.MembershipModulesAPIs/APGMembership.sln",
+      "path": "sc/APG/APG.MembershipModulesAPIs/APGMembership.sln",
       "type": "dotnet",
-      "migratorPath": "APG/APG.MembershipModulesAPIs/src/APGMembership.MigrationTools/APGMembership.MigrationTools.csproj",
+      "migratorPath": "sc/APG/APG.MembershipModulesAPIs/src/APGMembership.MigrationTools/APGMembership.MigrationTools.csproj",
       "dockerPort": "44389",
       "contextFolder": "APG.MembershipModulesAPIs",
       "imageContainerName": "apg-membership"
     },
     {
       "name": "APG Portal API Gateway",
-      "path": "APG/APG.PortalAPIGateway/APGPortalAPIGateway.sln",
+      "path": "sc/APG/APG.PortalAPIGateway/APGPortalAPIGateway.sln",
       "type": "dotnet",
       "dockerPort": "44359",
       "contextFolder": "APG.PortalAPIGateway",
@@ -20,25 +20,25 @@
     },
     {
       "name": "APG Fundamental",
-      "path": "APG/APG.FundamentalModulesAPIs/APGFundamentals.sln",
+      "path": "sc/APG/APG.FundamentalModulesAPIs/APGFundamentals.sln",
       "type": "dotnet",
-      "migratorPath": "APG/APG.FundamentalModulesAPIs/src/APGFundamental.MigrationTools/APGFundamental.MigrationTools.csproj",
+      "migratorPath": "sc/APG/APG.FundamentalModulesAPIs/src/APGFundamental.MigrationTools/APGFundamental.MigrationTools.csproj",
       "dockerPort": "44390",
       "contextFolder": "APG.FundamentalModulesAPIs",
       "imageContainerName": "apg-fundamental"
     },
     {
       "name": "APG Transaction",
-      "path": "APG/APG.TransactionModulesAPIs/APGTransaction.sln",
+      "path": "sc/APG/APG.TransactionModulesAPIs/APGTransaction.sln",
       "type": "dotnet",
-      "migratorPath": "APG/APG.TransactionModulesAPIs/src/APGTransactions.MigrationTools/APGTransactions.MigrationTools.csproj",
+      "migratorPath": "sc/APG/APG.TransactionModulesAPIs/src/APGTransactions.MigrationTools/APGTransactions.MigrationTools.csproj",
       "dockerPort": "44387",
       "contextFolder": "APG.TransactionModulesAPIs",
       "imageContainerName": "apg-transaction"
     },
     {
       "name": "APG Log",
-      "path": "APG/APG.LogModulesAPIs/APGLogs.sln",
+      "path": "sc/APG/APG.LogModulesAPIs/APGLogs.sln",
       "type": "dotnet",
       "dockerPort": "44349",
       "contextFolder": "APG.LogModulesAPIs",
@@ -46,7 +46,7 @@
     },
     {
       "name": "APG Smartbox API Gateway",
-      "path": "APG/APG.SmartBoxAPIGateway/APGSmartBoxAPIGateway.sln",
+      "path": "sc/APG/APG.SmartBoxAPIGateway/APGSmartBoxAPIGateway.sln",
       "type": "dotnet",
       "dockerPort": "44357",
       "contextFolder": "APG.SmartBoxAPIGateway",
@@ -54,7 +54,7 @@
     },
     {
       "name": "APG Execution",
-      "path": "APG/APG.ExecutionModulesAPIs/APGExecutions.sln",
+      "path": "sc/APG/APG.ExecutionModulesAPIs/APGExecutions.sln",
       "type": "dotnet",
       "dockerPort": "44310",
       "contextFolder": "APG.ExecutionModulesAPIs",
@@ -62,63 +62,74 @@
     },
     {
       "name": "APG Digital Integration",
-      "path": "APG/APG.MPCSSIntegrationAPIs/APGDigitalIntegration.sln",
+      "path": "sc/APG/APG.MPCSSIntegrationAPIs/APGDigitalIntegration.sln",
       "type": "dotnet",
-      "migratorPath": "APG/APG.MPCSSIntegrationAPIs/src/APGDigitalIntegration.MigrationTools/APGDigitalIntegration.MigrationTools.csproj",
+      "migratorPath": "sc/APG/APG.MPCSSIntegrationAPIs/src/APGDigitalIntegration.MigrationTools/APGDigitalIntegration.MigrationTools.csproj",
       "dockerPort": "44392",
       "contextFolder": "APG.MPCSSIntegrationAPIs",
       "imageContainerName": "apg-mpcss"
     },
     {
       "name": "APG Notification",
-      "path": "APG/APG.NotificationModulesAPIs/APGNotifications.sln",
+      "path": "sc/APG/APG.NotificationModulesAPIs/APGNotifications.sln",
       "type": "dotnet",
-      "migratorPath": "APG/APG.NotificationModulesAPIs/src/APGNotification.MigrationTools/APGNotification.MigrationTools.csproj",
+      "migratorPath": "sc/APG/APG.NotificationModulesAPIs/src/APGNotification.MigrationTools/APGNotification.MigrationTools.csproj",
       "dockerPort": "44391",
       "contextFolder": "APG.NotificationModulesAPIs",
       "imageContainerName": "apg-notification"
     },
     {
+      "name": "APG Merchant App Gateway",
+      "path": "sc/APG/APG.MerchantAppAPIGateway/APGMerchantAppAPIGateway.sln",
+      "type": "dotnet",
+      "contextFolder": "APG.MerchantAppAPIGateway"
+    },
+    {
       "name": "APG Proxy",
-      "path": "APG/APG.Portal.Proxy",
+      "path": "sc/APG/APG.Portal.Proxy",
       "type": "nodejs"
     },
     {
       "name": "APG Portal",
-      "path": "APG/APG.Portal",
+      "path": "sc/APG/APG.Portal",
       "type": "angular"
     },
     {
       "name": "Smart box Proxy",
-      "path": "APG/APG.eCommerceSmartBox.Proxy",
+      "path": "sc/APG/APG.eCommerceSmartBox.Proxy",
       "type": "nodejs"
     },
     {
       "name": "Smart Box",
-      "path": "APG/APG.eCommerceSmartBox",
+      "path": "sc/APG/APG.eCommerceSmartBox",
       "type": "angular"
     },
     {
+      "name": "OmanNet Switch",
+      "path": "sc/OmanNetSwitch/OmanNetSwitch/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.sln",
+      "type": "dotnet"
+    },
+    {
       "name": "AmwalSS Fundamental",
-      "path": "AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.sln",
+      "path": "sc/AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.sln",
       "type": "dotnet",
-      "migratorPath": "AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.MigrationTools/AmwalSSFundamental.MigrationTools.csproj",
+      "migratorPath": "sc/AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.MigrationTools/AmwalSSFundamental.MigrationTools.csproj",
       "dockerPort": "44309",
       "contextFolder": "AmwalSS.Fundamental",
       "imageContainerName": "amwalss-fundamental"
     },
     {
       "name": "AmwalSS Membership",
-      "path": "AmwalSS/AmwalSS.Membership/AmwalSSMembership.sln",
+      "path": "sc/AmwalSS/AmwalSS.Membership/AmwalSSMembership.sln",
       "type": "dotnet",
-      "migratorPath": "AmwalSS/AmwalSS.Membership/src/AmwalSSMembership.MigrationTools/AmwalSSMembership.MigrationTools.csproj",
+      "migratorPath": "sc/AmwalSS/AmwalSS.Membership/src/AmwalSSMembership.MigrationTools/AmwalSSMembership.MigrationTools.csproj",
       "dockerPort": "44379",
       "contextFolder": "AmwalSS.Membership",
       "imageContainerName": "amwalss-membership"
     },
     {
       "name": "AmwalSS Log",
-      "path": "AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.sln",
+      "path": "sc/AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.sln",
       "type": "dotnet",
       "dockerPort": "44350",
       "contextFolder": "AmwalSS.LogModulesAPIs",
@@ -126,7 +137,7 @@
     },
     {
       "name": "AmwalSS Portal Gateway",
-      "path": "AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.sln",
+      "path": "sc/AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.sln",
       "type": "dotnet",
       "dockerPort": "44358",
       "contextFolder": "AmwalSS.PortalAPIGateway",
@@ -134,13 +145,19 @@
     },
     {
       "name": "AmwalSS Proxy",
-      "path": "AmwalSS/AmwalSS.PortalProxy",
+      "path": "sc/AmwalSS/AmwalSS.PortalProxy",
       "type": "nodejs"
     },
     {
       "name": "AmwalSS Portal",
-      "path": "AmwalSS/AmwalSS.Portal",
+      "path": "sc/AmwalSS/AmwalSS.Portal",
       "type": "angular"
+    },
+    {
+      "name": "Pos Client",
+      "path": "utils/PosClient/PosClient.sln",
+      "type": "dotnet",
+      "contextFolder": "utils/PosClient"
     }
   ]
 }
