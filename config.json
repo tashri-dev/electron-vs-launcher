@@ -8,7 +8,9 @@
       "migratorPath": "sc/APG/APG.MembershipModulesAPIs/src/APGMembership.MigrationTools/APGMembership.MigrationTools.csproj",
       "dockerPort": "44389",
       "contextFolder": "APG.MembershipModulesAPIs",
-      "imageContainerName": "apg-membership"
+      "imageContainerName": "apg-membership",
+      "startupProject": "src/APGMembership.Service.Api/APGMembership.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44389"
     },
     {
       "name": "APG Portal API Gateway",
@@ -22,10 +24,12 @@
       "name": "APG Fundamental",
       "path": "sc/APG/APG.FundamentalModulesAPIs/APGFundamentals.sln",
       "type": "dotnet",
-      "migratorPath": "sc/APG/APG.FundamentalModulesAPIs/src/APGFundamental.MigrationTools/APGFundamental.MigrationTools.csproj",
+      "migratorPath": "src/APGFundamental.MigrationTools/APGFundamental.MigrationTools.csproj",
       "dockerPort": "44390",
       "contextFolder": "APG.FundamentalModulesAPIs",
-      "imageContainerName": "apg-fundamental"
+      "imageContainerName": "apg-fundamental",
+      "startupProject": "src/APGFundamentals.Service.Api/APGFundamentals.Service.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44390"
     },
     {
       "name": "APG Transaction",
@@ -34,6 +38,8 @@
       "migratorPath": "sc/APG/APG.TransactionModulesAPIs/src/APGTransactions.MigrationTools/APGTransactions.MigrationTools.csproj",
       "dockerPort": "44387",
       "contextFolder": "APG.TransactionModulesAPIs",
+      "startupProject": "src/APGTransaction.Service.Api/APGTransaction.Service.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44387",
       "imageContainerName": "apg-transaction"
     },
     {
@@ -42,6 +48,8 @@
       "type": "dotnet",
       "dockerPort": "44349",
       "contextFolder": "APG.LogModulesAPIs",
+      "startupProject": "src/APGLogs.Service.Api/APGLogs.Service.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44349",
       "imageContainerName": "apg-log"
     },
     {
@@ -50,6 +58,8 @@
       "type": "dotnet",
       "dockerPort": "44357",
       "contextFolder": "APG.SmartBoxAPIGateway",
+      "startupProject": "APGSmartBoxAPIs/APGSmartBoxAPIs.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44357",
       "imageContainerName": "apg-smartbox-gateway"
     },
     {
@@ -57,6 +67,8 @@
       "path": "sc/APG/APG.ExecutionModulesAPIs/APGExecutions.sln",
       "type": "dotnet",
       "dockerPort": "44310",
+      "startupProject": "src/APGExecutions.Services.Api/APGExecutions.Services.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:44310",
       "contextFolder": "APG.ExecutionModulesAPIs",
       "imageContainerName": "apg-execution"
     },
@@ -82,6 +94,7 @@
       "name": "APG Merchant App Gateway",
       "path": "sc/APG/APG.MerchantAppAPIGateway/APGMerchantAppAPIGateway.sln",
       "type": "dotnet",
+      "startupProject": "src/APG.MerchentAppGatewayAPG.MerchantAppGateway.csproj",
       "contextFolder": "APG.MerchantAppAPIGateway"
     },
     {
@@ -106,58 +119,22 @@
     },
     {
       "name": "OmanNet Switch",
-      "path": "sc/OmanNetSwitch/OmanNetSwitch/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.sln",
-      "type": "dotnet"
-    },
-    {
-      "name": "AmwalSS Fundamental",
-      "path": "sc/AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.sln",
+      "path": "sc//OmanNetSwitch/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.sln",
       "type": "dotnet",
-      "migratorPath": "sc/AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.MigrationTools/AmwalSSFundamental.MigrationTools.csproj",
-      "dockerPort": "44309",
-      "contextFolder": "AmwalSS.Fundamental",
-      "imageContainerName": "amwalss-fundamental"
+      "migratorPath": "sc//OmanNetSwitch/Amwal.OmanNetSwitch/src/Amwal.OmanNetSwitch.MigrationTools/Amwal.OmanNetSwitch.MigrationTools.csproj",
+      "dockerPort": "8584",
+      "contextFolder": "Amwal.OmanNetSwitch",
+      "startupProject": "src/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.Services.Api/Amwal.OmanNetSwitch.Services.Api.csproj",
+      "runArgs": "--environment Development --urls http://localhost:8584"
     },
     {
-      "name": "AmwalSS Membership",
-      "path": "sc/AmwalSS/AmwalSS.Membership/AmwalSSMembership.sln",
+      "name": "OmanNet Switch simulator",
+      "path": "sc/Switch/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.sln",
       "type": "dotnet",
-      "migratorPath": "sc/AmwalSS/AmwalSS.Membership/src/AmwalSSMembership.MigrationTools/AmwalSSMembership.MigrationTools.csproj",
-      "dockerPort": "44379",
-      "contextFolder": "AmwalSS.Membership",
-      "imageContainerName": "amwalss-membership"
-    },
-    {
-      "name": "AmwalSS Log",
-      "path": "sc/AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.sln",
-      "type": "dotnet",
-      "dockerPort": "44350",
-      "contextFolder": "AmwalSS.LogModulesAPIs",
-      "imageContainerName": "amwalss-log"
-    },
-    {
-      "name": "AmwalSS Portal Gateway",
-      "path": "sc/AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.sln",
-      "type": "dotnet",
-      "dockerPort": "44358",
-      "contextFolder": "AmwalSS.PortalAPIGateway",
-      "imageContainerName": "amwalss-portal-gateway"
-    },
-    {
-      "name": "AmwalSS Proxy",
-      "path": "sc/AmwalSS/AmwalSS.PortalProxy",
-      "type": "nodejs"
-    },
-    {
-      "name": "AmwalSS Portal",
-      "path": "sc/AmwalSS/AmwalSS.Portal",
-      "type": "angular"
-    },
-    {
-      "name": "Pos Client",
-      "path": "utils/PosClient/PosClient.sln",
-      "type": "dotnet",
-      "contextFolder": "utils/PosClient"
+      "dockerPort": "8583",
+      "contextFolder": "Amwal.OmanNetSwitch",
+      "startupProject": "Amwal.OmanNetSwitch.Simulator/Amwal.OmanNetSwitch.Simulator.csproj",
+      "runArgs": "--environment Development --urls http://localhost:8583"
     }
   ]
 }

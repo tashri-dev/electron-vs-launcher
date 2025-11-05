@@ -8,7 +8,9 @@
             "migratorPath": "ExamplePath\\Migrator\\Migrator.csproj",
             "dockerPort": 5001,
             "contextFolder": "ExamplePath",
-            "imageContainerName": "example-solution"
+            "imageContainerName": "example-solution",
+            "startupProject": "ExamplePath\\API\\ExampleAPI.csproj",
+            "runArgs": "--environment Development --urls http://localhost:5000"
         }
     ]
 }

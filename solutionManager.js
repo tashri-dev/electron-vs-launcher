@@ -4,7 +4,8 @@ const { exec, spawn } = require('child_process');
 const Registry = require('winreg');
 const ConfigManager = require('./configManager');
 const os = require('os');
-const { Notification } = require('electron').remote || require('@electron/remote');
+const { Notification, ipcRenderer } = require('electron').remote || require('@electron/remote');
+const { ipcRenderer: directIpcRenderer } = require('electron');
 let rootPathGlobal = '';
 class SolutionManager {
     constructor() {
@@ -41,24 +42,74 @@ class SolutionManager {
     }
 
     bindMainActions() {
-        console.log('Binding main actions...');
-        // Main action buttons
-        const buttons = {
-            'clearBtn': () => this.resetSelections(),
-            'selectAllBtn': () => this.selectAll(),
-            'launchBtn': () => this.runSelectedSolutions(),
-            'get-latest-selected': () => this.getLatestForSelected()
-        };
+        console.log('🔗 Binding main actions...');
 
-        Object.entries(buttons).forEach(([id, action]) => {
-            const button = document.getElementById(id);
-            if (button) {
-                button.addEventListener('click', action.bind(this));
-                console.log(`Bound action to ${id}`);
-            } else {
-                console.warn(`Button ${id} not found`);
-            }
-        });
+        // Add a small delay to ensure DOM is fully loaded
+        setTimeout(() => {
+            console.log('🔗 Starting button binding process...');
+
+            // Debug: Check DOM state
+            const allButtons = document.querySelectorAll('button');
+            console.log(`🔍 Found ${allButtons.length} total buttons in DOM`);
+
+            // Bind buttons individually to avoid reference issues
+            this.bindButton('clearBtn', () => this.resetSelections());
+            this.bindButton('selectAllBtn', () => this.selectAll());
+            this.bindButton('launchBtn', () => this.runSelectedSolutions());
+            this.bindButton('get-latest-selected', () => this.getLatestForSelected());
+            this.bindButton('runCliBtn', () => this.runSelectedInCli());
+
+            console.log('🔗 Button binding process completed');
+
+            // Additional verification for CLI button
+            setTimeout(() => {
+                const cliBtn = document.getElementById('runCliBtn');
+                if (cliBtn) {
+                    console.log('✅ CLI button verification: FOUND');
+                    console.log('   Button text:', cliBtn.textContent.trim());
+                    console.log('   Button class:', cliBtn.className);
+                    console.log('   Button disabled:', cliBtn.disabled);
+                } else {
+                    console.error('❌ CLI button verification: NOT FOUND');
+                }
+            }, 100);
+
+        }, 500); // Increased delay to ensure DOM is ready
+    }
+
+    bindButton(buttonId, action) {
+        console.log(`🔗 Attempting to bind button: ${buttonId}`);
+        const button = document.getElementById(buttonId);
+        if (button) {
+            console.log(`   ✅ Found button: ${buttonId}`);
+            console.log(`   📝 Button text: "${button.textContent.trim()}"`);
+            console.log(`   🎨 Button classes: ${button.className}`);
+
+            // Remove all existing listeners by cloning the element
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            console.log(`   🔄 Cloned and replaced button: ${buttonId}`);
+
+            // Add the new listener
+            newButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log(`🖱️ Button clicked: ${buttonId}`);
+                console.log(`   🎯 Calling action function...`);
+                try {
+                    action.call(this);
+                    console.log(`   ✅ Action completed for ${buttonId}`);
+                } catch (error) {
+                    console.error(`   ❌ Error in action for ${buttonId}:`, error);
+                }
+            });
+            console.log(`   ✅ Event listener added to ${buttonId}`);
+        } else {
+            console.warn(`   ❌ Button ${buttonId} not found in DOM`);
+            // Debug: List all buttons with IDs
+            const allButtonsWithIds = document.querySelectorAll('button[id]');
+            console.log(`   🔍 Available buttons with IDs:`, Array.from(allButtonsWithIds).map(b => b.id));
+        }
     }
 
     loadSolutions() {
@@ -100,6 +151,12 @@ class SolutionManager {
 
         // Add pagination controls
         this.addPaginationControls(container);
+
+        // Set up checkbox listeners and update counter
+        setTimeout(() => {
+            this.setupCheckboxListeners();
+            this.updateSelectedCount();
+        }, 100);
     }
 
     createGroupElement(parentDir, solutions) {
@@ -346,6 +403,7 @@ class SolutionManager {
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             checkbox.checked = false;
         });
+        this.updateSelectedCount();
     }
 
     selectAll() {
@@ -353,6 +411,7 @@ class SolutionManager {
         document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
             checkbox.checked = true;
         });
+        this.updateSelectedCount();
     }
 
     async getLatestForSelected() {
@@ -560,7 +619,7 @@ class SolutionManager {
         }
     }
 
-    runSelectedSolutions() {
+    async runSelectedSolutions() {
         try {
             const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
             console.log(`Found ${selectedCheckboxes.length} selected solutions`);
@@ -570,24 +629,302 @@ class SolutionManager {
                 return;
             }
 
-            selectedCheckboxes.forEach(checkbox => {
+            // Track Rider solutions separately to handle them properly
+            const riderSolutions = [];
+            const otherSolutions = [];
+
+            // Separate Rider and non-Rider solutions
+            for (const checkbox of selectedCheckboxes) {
                 const solutionPath = checkbox.value;
                 const solution = this.solutions.find(s => s.path === solutionPath);
 
                 if (!solution) {
                     console.error(`Solution not found for path: ${solutionPath}`);
-                    return;
+                    continue;
                 }
 
                 const ideSelect = document.getElementById(`ide-${this.getSolutionId(solution)}`);
                 const selectedIde = ideSelect ? ideSelect.value : this.IDE.VSCODE;
 
-                console.log(`Launching solution: ${solution.name} with IDE: ${selectedIde}`);
-                this.launchSolution(solution, selectedIde);
-            });
+                if (selectedIde.includes('Rider')) {
+                    riderSolutions.push({ solution, ide: selectedIde });
+                } else {
+                    otherSolutions.push({ solution, ide: selectedIde });
+                }
+            }
+
+            // Launch non-Rider solutions first (they start faster)
+            for (const { solution, ide } of otherSolutions) {
+                console.log(`Launching solution: ${solution.name} with IDE: ${ide}`);
+                await this.launchSolution(solution, ide);
+            }
+
+            // Handle Rider solutions with proper timing and singleton logic
+            if (riderSolutions.length > 0) {
+                console.log(`🔥 Launching ${riderSolutions.length} Rider solutions with proper sequencing...`);
+                await this.launchRiderSolutions(riderSolutions);
+            }
+
         } catch (error) {
             console.error('Error in runSelectedSolutions:', error);
             this.showNotification('Error', `Failed to run solutions: ${error.message}`, 'error');
+        }
+    }
+
+    async launchRiderSolutions(riderSolutions) {
+        try {
+            console.log(`🔥 Launching ${riderSolutions.length} Rider solutions...`);
+
+            // Launch all Rider solutions with a small delay between them
+            for (let i = 0; i < riderSolutions.length; i++) {
+                const { solution, ide } = riderSolutions[i];
+
+                console.log(`🔥 Launching Rider solution ${i + 1}/${riderSolutions.length}: ${solution.name}`);
+
+                // Add small delay between solutions to prevent conflicts
+                if (i > 0) {
+                    console.log('⏱️ Brief pause before next Rider solution...');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+                await this.launchSolution(solution, ide);
+            }
+
+            console.log('✅ All Rider solutions launched successfully');
+
+        } catch (error) {
+            console.error('❌ Error launching Rider solutions:', error);
+            this.showNotification('Error', `Failed to launch Rider solutions: ${error.message}`, 'error');
+        }
+    }
+
+    // Debug method for testing CLI functionality
+    debugTestCli(solutionName = null) {
+        console.log('🧪 DEBUG: Testing CLI functionality...');
+
+        if (solutionName) {
+            // Test specific solution
+            const solution = this.solutions.find(s => s.name.includes(solutionName));
+            if (solution) {
+                console.log('🎯 Testing specific solution:', solution.name);
+                this.runSolutionInExternalTerminal(solution);
+            } else {
+                console.log('❌ Solution not found:', solutionName);
+                console.log('Available solutions:', this.solutions.map(s => s.name));
+            }
+        } else {
+            // Test with first available solution
+            if (this.solutions.length > 0) {
+                const testSolution = this.solutions[0];
+                console.log('🎯 Testing with first solution:', testSolution.name);
+                this.runSolutionInExternalTerminal(testSolution);
+            } else {
+                console.log('❌ No solutions available');
+            }
+        }
+    }
+
+    // Debug method to test IPC communication
+    async debugTestIpc() {
+        console.log('🧪 DEBUG: Testing IPC communication...');
+
+        try {
+            const ipcRendererInstance = directIpcRenderer || ipcRenderer;
+
+            if (!ipcRendererInstance) {
+                console.error('❌ IPC Renderer not available');
+                return;
+            }
+
+            console.log('✅ IPC Renderer found');
+
+            // Test with a simple terminal launch
+            const testPath = '/Users/taha/Work';
+            console.log(`📡 Testing IPC with path: ${testPath}`);
+
+            const result = await ipcRendererInstance.invoke('launch-terminal', {
+                solutionPath: testPath + '/test.sln',
+                solutionName: 'IPC Test',
+                platform: process.platform
+            });
+
+            console.log('📡 IPC Test Result:', result);
+
+            if (result.success) {
+                console.log('✅ IPC communication working!');
+                this.showNotification('Success', 'IPC test successful - terminal should have opened', 'success');
+            } else {
+                console.error('❌ IPC test failed:', result.error);
+                this.showNotification('Error', `IPC test failed: ${result.error}`, 'error');
+            }
+
+        } catch (error) {
+            console.error('❌ IPC test error:', error);
+            this.showNotification('Error', `IPC test error: ${error.message}`, 'error');
+        }
+    }
+
+    // Debug method to simulate checkbox selection and run CLI
+    debugSimulateCli() {
+        console.log('🧪 DEBUG: Simulating CLI execution...');
+
+        // Check current checkbox states
+        const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
+        const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
+
+        console.log(`📊 Found ${allCheckboxes.length} total checkboxes, ${checkedBoxes.length} checked`);
+
+        if (checkedBoxes.length === 0 && allCheckboxes.length > 0) {
+            // Auto-select first checkbox for testing
+            console.log('🔧 Auto-selecting first checkbox for testing...');
+            allCheckboxes[0].checked = true;
+            console.log('✅ First checkbox selected');
+        }
+
+        // Now run the CLI method
+        this.runSelectedInCli();
+    }
+
+    async runSelectedInCli() {
+        console.log('🚀 runSelectedInCli method called!');
+        console.log('🔍 Debug: Method execution started');
+
+        try {
+            console.log('🔍 Querying for checkboxes...');
+            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            console.log(`Found ${selectedCheckboxes.length} selected solutions for CLI execution`);
+            console.log('Selected checkboxes:', Array.from(selectedCheckboxes).map(cb => ({
+                id: cb.id,
+                value: cb.value,
+                checked: cb.checked
+            })));
+
+            if (selectedCheckboxes.length === 0) {
+                console.log('⚠️ No solutions selected - showing warning');
+                this.showNotification('Warning', 'Please select at least one solution to run', 'warning');
+                return;
+            }
+
+            // Show confirmation for multiple solutions
+            if (selectedCheckboxes.length >= 5) {
+                console.log(`🤔 Many solutions selected (${selectedCheckboxes.length}), showing confirmation`);
+                const confirmed = confirm(`You are about to start ${selectedCheckboxes.length} solutions in external terminals. This may use significant system resources. Continue?`);
+                if (!confirmed) {
+                    console.log('User cancelled running multiple solutions');
+                    return;
+                }
+            }
+
+            console.log(`✅ Starting ${selectedCheckboxes.length} solutions in external terminals...`);
+
+            // Initialize terminal tracking if not exists
+            if (!this.runningTerminals) {
+                this.runningTerminals = new Set();
+            }
+
+            // Start solutions in external terminals with tracking
+            let successCount = 0;
+            for (const checkbox of selectedCheckboxes) {
+                const solutionPath = checkbox.value;
+                const solution = this.solutions.find(s => s.path === solutionPath);
+
+                if (!solution) {
+                    console.error(`Solution not found for path: ${solutionPath}`);
+                    continue;
+                }
+
+                // Check if this solution is already running
+                const terminalKey = `${solution.name}-${solution.path}`;
+                if (this.runningTerminals.has(terminalKey)) {
+                    console.log(`⚠️ ${solution.name} is already running in a terminal, skipping...`);
+                    this.showNotification('Info', `${solution.name} is already running`, 'info');
+                    continue;
+                }
+
+                try {
+                    console.log(`🖥️ Starting external terminal for: ${solution.name}`);
+
+                    // Mark as running before starting
+                    this.runningTerminals.add(terminalKey);
+
+                    await this.runSolutionInExternalTerminal(solution);
+                    successCount++;
+                    console.log(`✅ Successfully started ${solution.name}`);
+
+                    // Remove from tracking after a delay (assuming it starts properly)
+                    setTimeout(() => {
+                        this.runningTerminals.delete(terminalKey);
+                    }, 5000);
+
+                } catch (error) {
+                    console.error(`❌ Failed to start ${solution.name}:`, error);
+                    this.runningTerminals.delete(terminalKey); // Remove from tracking on error
+                    this.showNotification('Error', `Failed to start ${solution.name}: ${error.message}`, 'error');
+                }
+
+                // Small delay between terminal launches to prevent resource conflicts
+                if (successCount < selectedCheckboxes.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            if (successCount > 0) {
+                console.log(`🎉 Started ${successCount} of ${selectedCheckboxes.length} solution(s) successfully`);
+                this.showNotification('Success', `Started ${successCount} of ${selectedCheckboxes.length} solution(s) in external terminals`, 'success');
+            } else {
+                this.showNotification('Warning', 'No new terminals were started (solutions may already be running)', 'warning');
+            }
+        } catch (error) {
+            console.error('❌ Error in runSelectedInCli:', error);
+            this.showNotification('Error', `Failed to run solutions in CLI: ${error.message}`, 'error');
+        }
+    }
+
+    async runSolutionInExternalTerminal(solution) {
+        try {
+            console.log(`🖥️ [Renderer] Setting up external terminal for ${solution.name}...`);
+
+            const solutionPath = path.resolve(rootPathGlobal, solution.path);
+            const platform = process.platform;
+
+            console.log(`� [Renderer] Solution path: ${solutionPath}`);
+            console.log(`🔧 [Renderer] Platform: ${platform}`);
+
+            // Get the correct ipcRenderer instance
+            const ipcRendererInstance = directIpcRenderer || ipcRenderer;
+
+            if (!ipcRendererInstance) {
+                throw new Error('IPC Renderer not available');
+            }
+
+            console.log(`� [Renderer] Sending terminal launch request to main process...`);
+
+            // Send IPC message to main process to launch terminal
+            const result = await ipcRendererInstance.invoke('launch-terminal', {
+                solutionPath: solutionPath,
+                solutionName: solution.name,
+                platform: platform,
+                solutionType: solution.type,
+                dockerPort: solution.dockerPort,
+                startupProject: solution.startupProject,
+                runArgs: solution.runArgs
+            });
+
+            console.log(`� [Renderer] Received response from main process:`, result);
+
+            if (result.success) {
+                console.log(`✅ [Renderer] Terminal launched successfully for ${solution.name}`);
+                this.showNotification('Success', result.message || `Terminal opened for ${solution.name}`, 'success');
+            } else {
+                console.error(`❌ [Renderer] Terminal launch failed for ${solution.name}:`, result.error);
+                this.showNotification('Error', `Failed to open terminal: ${result.error}`, 'error');
+                throw new Error(result.error);
+            }
+
+        } catch (error) {
+            console.error(`❌ [Renderer] Error running solution ${solution.name} in external terminal:`, error);
+            this.showNotification('Error', `Failed to start ${solution.name}: ${error.message}`, 'error');
+            throw error;
         }
     }
 
@@ -699,7 +1036,10 @@ class SolutionManager {
         try {
             // Ensure the solution path is absolute and normalized
             const absoluteSolutionPath = path.resolve(solutionPath);
-            console.log('Launching Rider:', { absoluteSolutionPath, debug });
+            console.log('🔥 Launching Rider:', { absoluteSolutionPath, debug });
+
+            // Clean up any lock files that might cause conflicts
+            await this.killRiderLockFiles(absoluteSolutionPath);
 
             // First try to find Rider through paths
             let riderPath = await this.findRiderPath();
@@ -707,23 +1047,23 @@ class SolutionManager {
                 throw new Error('JetBrains Rider installation not found');
             }
 
-            console.log('Found Rider at:', riderPath);
+            console.log('🔥 Found Rider at:', riderPath);
 
-            // Prepare launch arguments
+            // NEW: Use a different approach - always use the "open with Rider" approach
+            // This ensures we don't get multiple Rider windows
             const args = [];
-            if (debug) {
-                args.push('--wait');
-                args.push('--line');
-                args.push('1');
-                args.push('--debug');
-            }
 
-            // Always add the solution path last
+            // Always add the solution path first
             args.push(absoluteSolutionPath);
 
-            console.log('Launching Rider with args:', args);
+            if (debug) {
+                // For debug mode, we'll handle this within Rider
+                console.log('🔥 Debug mode will be handled within Rider');
+            }
 
-            // Launch Rider with detached:true and stdio:ignore to prevent closing with app
+            console.log('🔥 Opening solution in Rider with args:', args);
+
+            // Use detached spawn to avoid keeping the process tied to our app
             const child = spawn(riderPath, args, {
                 windowsHide: false,
                 stdio: 'ignore',
@@ -732,11 +1072,108 @@ class SolutionManager {
             });
 
             child.unref();
+
+            console.log('✅ Rider launch command executed');
             this.showNotification('Success', 'Rider launched successfully', 'success');
+
         } catch (error) {
-            console.error('Error launching Rider:', error);
+            console.error('❌ Error launching Rider:', error);
             this.showNotification('Error', `Failed to launch Rider: ${error.message}`, 'error');
         }
+    }
+
+    async isRiderRunning() {
+        return new Promise((resolve) => {
+            const platform = process.platform;
+            let command, args;
+
+            if (platform === 'darwin') {
+                // macOS
+                command = 'pgrep';
+                args = ['-f', 'rider'];
+            } else if (platform === 'win32') {
+                // Windows
+                command = 'tasklist';
+                args = ['/FI', 'IMAGENAME eq rider64.exe'];
+            } else {
+                // Linux
+                command = 'pgrep';
+                args = ['-f', 'rider'];
+            }
+
+            exec(`${command} ${args.join(' ')}`, (error, stdout) => {
+                if (error) {
+                    resolve(false);
+                } else {
+                    resolve(stdout.trim().length > 0);
+                }
+            });
+        });
+    }
+
+    async waitForRiderToStart(maxWaitTime = 10000) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWaitTime) {
+            if (await this.isRiderRunning()) {
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        return false;
+    }
+
+    async killRiderLockFiles(solutionPath) {
+        try {
+            const solutionDir = path.dirname(solutionPath);
+            const ideaDir = path.join(solutionDir, '.idea');
+
+            if (fs.existsSync(ideaDir)) {
+                // Remove lock files that can cause Rider conflicts
+                const lockFiles = [
+                    path.join(ideaDir, '.lock'),
+                    path.join(ideaDir, 'shelf'),
+                    path.join(ideaDir, 'workspace.xml.lock')
+                ];
+
+                for (const lockFile of lockFiles) {
+                    if (fs.existsSync(lockFile)) {
+                        try {
+                            if (fs.lstatSync(lockFile).isDirectory()) {
+                                fs.rmSync(lockFile, { recursive: true, force: true });
+                            } else {
+                                fs.unlinkSync(lockFile);
+                            }
+                            console.log(`Removed lock file: ${lockFile}`);
+                        } catch (error) {
+                            console.warn(`Could not remove lock file ${lockFile}:`, error.message);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Error cleaning Rider lock files:', error.message);
+        }
+    }
+
+    async startRiderEmpty() {
+        return new Promise((resolve, reject) => {
+            const riderPath = this.findRiderPath();
+            if (!riderPath) {
+                reject(new Error('Rider path not found'));
+                return;
+            }
+
+            // Start Rider without any project
+            const child = spawn(riderPath, [], {
+                windowsHide: false,
+                stdio: 'ignore',
+                shell: process.platform === 'win32',
+                detached: true
+            });
+
+            child.unref();
+            resolve();
+        });
     }
 
     async launchInVSCode(solution) {
@@ -858,49 +1295,120 @@ class SolutionManager {
 
     async updateDb(solution) {
         try {
-            const directory = this.getSolutionDirectory(solution);
-            const migratorPath = path.join(directory, 'Database', 'Migrator', 'Migrator.csproj');
+            // Switch to output tab and clear it for migration output
+            const outputTab = document.getElementById('output-tab');
+            if (outputTab) {
+                outputTab.click();
+            }
+
+            if (window.addOutputEntry) {
+                window.addOutputEntry(`Starting database migration for ${solution.name}...`, 'info');
+            }
+
+            // Use solution's migratorPath if available, otherwise try default location
+            let migratorPath;
+            if (solution.migratorPath) {
+                migratorPath = path.join(rootPathGlobal, solution.migratorPath);
+            } else {
+                const directory = this.getSolutionDirectory(solution);
+                migratorPath = path.join(directory, 'Database', 'Migrator', 'Migrator.csproj');
+            }
 
             if (!fs.existsSync(migratorPath)) {
-                throw new Error(`Migrator project not found at: ${migratorPath}`);
+                const errorMsg = `Migrator project not found at: ${migratorPath}`;
+                if (window.addOutputEntry) {
+                    window.addOutputEntry(errorMsg, 'error');
+                }
+                throw new Error(errorMsg);
             }
 
             // Find dotnet executable
             let dotnetPath = 'dotnet';
-            const possiblePaths = [
-                '/usr/local/bin/dotnet',
-                '/opt/dotnet/dotnet',
-                '/usr/bin/dotnet',
-                process.env.DOTNET_ROOT ? path.join(process.env.DOTNET_ROOT, 'dotnet') : null
-            ].filter(Boolean);
-
-            for (const possiblePath of possiblePaths) {
-                if (fs.existsSync(possiblePath)) {
-                    dotnetPath = possiblePath;
-                    break;
-                }
+            if (this.env.paths.dotnet && this.env.paths.dotnet.length > 0) {
+                dotnetPath = this.env.paths.dotnet[0];
             }
 
             console.log('Using dotnet path:', dotnetPath);
             console.log('Migrator path:', migratorPath);
 
-            const command = `${dotnetPath} run --project "${migratorPath}"`;
-            console.log('Executing command:', command);
-
-            const { stdout, stderr } = await execAsync(command);
-
-            if (stderr) {
-                console.error('Migration stderr:', stderr);
-                if (!stderr.includes('Build succeeded')) {
-                    throw new Error(`Migration failed: ${stderr}`);
-                }
+            if (window.addOutputEntry) {
+                window.addOutputEntry(`Running: ${dotnetPath} run --project "${migratorPath}"`, 'info');
             }
 
-            console.log('Migration stdout:', stdout);
-            this.showNotification('Success', `Database updated successfully for ${solution.name}`, 'success');
+            return new Promise((resolve, reject) => {
+                const child = spawn(dotnetPath, ['run', '--project', migratorPath], {
+                    cwd: path.dirname(migratorPath),
+                    stdio: 'pipe'
+                });
+
+                let outputBuffer = '';
+                let errorBuffer = '';
+
+                child.stdout.on('data', (data) => {
+                    const text = data.toString();
+                    outputBuffer += text;
+                    console.log('Migration stdout:', text);
+                    if (window.addOutputEntry) {
+                        // Split by lines and add each line separately
+                        text.split('\n').filter(line => line.trim()).forEach(line => {
+                            window.addOutputEntry(line, 'info');
+                        });
+                    }
+                });
+
+                child.stderr.on('data', (data) => {
+                    const text = data.toString();
+                    errorBuffer += text;
+                    console.error('Migration stderr:', text);
+                    if (window.addOutputEntry) {
+                        // Split by lines and add each line separately
+                        text.split('\n').filter(line => line.trim()).forEach(line => {
+                            window.addOutputEntry(line, 'error');
+                        });
+                    }
+                });
+
+                child.on('close', (code) => {
+                    if (code === 0) {
+                        const successMsg = `Database migration completed successfully for ${solution.name}`;
+                        console.log(successMsg);
+                        if (window.addOutputEntry) {
+                            window.addOutputEntry(successMsg, 'success');
+                        }
+                        this.showNotification('Success', successMsg, 'success');
+                        resolve();
+                    } else {
+                        const errorMsg = `Database migration failed for ${solution.name} (exit code: ${code})`;
+                        console.error(errorMsg);
+                        if (window.addOutputEntry) {
+                            window.addOutputEntry(errorMsg, 'error');
+                            if (errorBuffer) {
+                                window.addOutputEntry(`Error details: ${errorBuffer}`, 'error');
+                            }
+                        }
+                        this.showNotification('Error', errorMsg, 'error');
+                        reject(new Error(errorMsg));
+                    }
+                });
+
+                child.on('error', (error) => {
+                    const errorMsg = `Failed to start migration process: ${error.message}`;
+                    console.error(errorMsg);
+                    if (window.addOutputEntry) {
+                        window.addOutputEntry(errorMsg, 'error');
+                    }
+                    this.showNotification('Error', errorMsg, 'error');
+                    reject(error);
+                });
+            });
+
         } catch (error) {
-            console.error('Error updating database:', error);
-            this.showNotification('Error', `Failed to update database: ${error.message}`, 'error');
+            console.error('Error in updateDb:', error);
+            if (window.addOutputEntry) {
+                window.addOutputEntry(`Migration error: ${error.message}`, 'error');
+            }
+            this.showNotification('Error', `Migration failed: ${error.message}`, 'error');
+            throw error;
         }
     }
 
@@ -1022,16 +1530,142 @@ class SolutionManager {
             return inputPath;
         }
     }
+
+    updateSelectedCount() {
+        const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        const countElement = document.getElementById('selectedCount');
+        if (countElement) {
+            countElement.textContent = selectedCheckboxes.length;
+            countElement.className = selectedCheckboxes.length > 0 ? 'badge bg-primary' : 'badge bg-secondary';
+        }
+    }
+
+    setupCheckboxListeners() {
+        // Add event listeners to all checkboxes to update the counter
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                this.updateSelectedCount();
+            });
+        });
+    }
+
+    findRunnableProjects(solutionFilePath) {
+        try {
+            const solutionDir = path.dirname(solutionFilePath);
+            const runnableProjects = [];
+
+            // Look for common runnable project patterns
+            const searchPatterns = [
+                '**/Program.cs',
+                '**/*.Api/*.csproj',
+                '**/*.Web/*.csproj',
+                '**/*.WebApi/*.csproj',
+                '**/*.App/*.csproj',
+                '**/*.Console/*.csproj'
+            ];
+
+            // Search for projects with these patterns
+            function searchDirectory(dir, depth = 0) {
+                if (depth > 3) return; // Limit search depth
+
+                try {
+                    const items = fs.readdirSync(dir);
+
+                    for (const item of items) {
+                        const itemPath = path.join(dir, item);
+                        const stat = fs.statSync(itemPath);
+
+                        if (stat.isDirectory()) {
+                            // Check if this directory contains a Program.cs (likely runnable)
+                            const programPath = path.join(itemPath, 'Program.cs');
+                            if (fs.existsSync(programPath)) {
+                                // Look for a .csproj file in the same directory
+                                const csprojFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.csproj'));
+                                if (csprojFiles.length > 0) {
+                                    const projectPath = path.join(itemPath, csprojFiles[0]);
+                                    runnableProjects.push(projectPath);
+                                }
+                            }
+
+                            // Also check for API/Web/Console project patterns
+                            if (item.toLowerCase().includes('api') ||
+                                item.toLowerCase().includes('web') ||
+                                item.toLowerCase().includes('console') ||
+                                item.toLowerCase().includes('app')) {
+                                const csprojFiles = fs.readdirSync(itemPath).filter(f => f.endsWith('.csproj'));
+                                if (csprojFiles.length > 0) {
+                                    const projectPath = path.join(itemPath, csprojFiles[0]);
+                                    if (!runnableProjects.includes(projectPath)) {
+                                        runnableProjects.push(projectPath);
+                                    }
+                                }
+                            }
+
+                            // Recurse into subdirectories
+                            searchDirectory(itemPath, depth + 1);
+                        }
+                    }
+                } catch (error) {
+                    // Ignore permission errors or other issues
+                }
+            }
+
+            searchDirectory(solutionDir);
+
+            // Sort by preference: API projects first, then Web, then others
+            runnableProjects.sort((a, b) => {
+                const aName = path.basename(a).toLowerCase();
+                const bName = path.basename(b).toLowerCase();
+
+                if (aName.includes('api') && !bName.includes('api')) return -1;
+                if (!aName.includes('api') && bName.includes('api')) return 1;
+                if (aName.includes('web') && !bName.includes('web')) return -1;
+                if (!aName.includes('web') && bName.includes('web')) return 1;
+
+                return 0;
+            });
+
+            console.log(`Found ${runnableProjects.length} runnable projects:`, runnableProjects);
+            return runnableProjects;
+        } catch (error) {
+            console.error('Error finding runnable projects:', error);
+            return [];
+        }
+    }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Initializing SolutionManager...');
-    try {
-        window.solutionManager = new SolutionManager();
-    } catch (error) {
-        console.error('Failed to initialize SolutionManager:', error);
-    }
+    console.log('🚀 SolutionManager DOMContentLoaded event fired');
+
+    // Add a small delay to ensure all other scripts have loaded
+    setTimeout(() => {
+        console.log('Initializing SolutionManager...');
+        try {
+            // Check if already initialized
+            if (window.solutionManager) {
+                console.log('⚠️ SolutionManager already exists, skipping initialization');
+                return;
+            }
+
+            window.solutionManager = new SolutionManager();
+            console.log('✅ SolutionManager initialized successfully');
+
+            // Test the CLI button binding after initialization
+            setTimeout(() => {
+                const runCliBtn = document.getElementById('runCliBtn');
+                if (runCliBtn) {
+                    console.log('✅ CLI button found after initialization');
+                } else {
+                    console.warn('❌ CLI button NOT found after initialization');
+                }
+            }, 100);
+
+        } catch (error) {
+            console.error('Failed to initialize SolutionManager:', error);
+        }
+    }, 200); // Small delay to ensure all scripts are loaded
 });
 
 module.exports = SolutionManager;

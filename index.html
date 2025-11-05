@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
                  img-src 'self' data: https:; 
                  script-src 'self' 'unsafe-inline'; 
@@ -24,6 +25,70 @@
         display: none !important;
       }
     }
+
+    .output-container {
+      max-height: 400px;
+      overflow-y: auto;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    .output-entry {
+      margin-bottom: 8px;
+      padding: 4px;
+      border-left: 3px solid #007acc;
+      padding-left: 8px;
+    }
+
+    .output-entry.error {
+      border-left-color: #ff6b6b;
+      background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    .output-entry.success {
+      border-left-color: #51cf66;
+      background-color: rgba(81, 207, 102, 0.1);
+    }
+
+    .output-entry.warning {
+      border-left-color: #ffd43b;
+      background-color: rgba(255, 212, 59, 0.1);
+    }
+
+    .output-timestamp {
+      color: #868e96;
+      font-size: 10px;
+    }
+
+    .terminal-output {
+      background-color: #1e1e1e;
+      color: #ffffff;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 15px;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .terminal-tab {
+      position: relative;
+    }
+
+    .terminal-tab .close-tab {
+      margin-left: 8px;
+      color: #dc3545;
+      cursor: pointer;
+    }
+
+    .terminal-tab .close-tab:hover {
+      color: #c82333;
+    }
   </style>
 </head>
 
@@ -43,6 +108,11 @@
         <button class="btn btn-success btn-priority-medium" id="get-latest-selected">
           <i class="fa fa-cloud-download me-2"></i>Get Latest For Selected
         </button>
+        <button class="btn btn-info btn-priority-medium" id="runCliBtn"
+          title="Run only the selected (checked) solutions in separate external terminal windows">
+          <i class="fa fa-terminal me-2"></i>Run Selected in Cli <span id="selectedCount"
+            class="badge bg-secondary">0</span>
+        </button>
       </div>
 
       <!-- Tab Navigation -->
@@ -57,6 +127,12 @@
           <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button"
             role="tab">
             <i class="fa fa-cog me-2"></i>Configuration
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="output-tab" data-bs-toggle="tab" data-bs-target="#output" type="button"
+            role="tab">
+            <i class="fa fa-terminal me-2"></i>Output
           </button>
         </li>
       </ul>
@@ -209,6 +285,34 @@
                 <h6 class="mb-3">Current Configuration</h6>
                 <div class="current-config">
                   <pre id="currentConfig" class="bg-light p-3 rounded"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output Tab -->
+        <div class="tab-pane fade" id="output" role="tabpanel">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">
+                <i class="fa fa-database me-2"></i>Migration Output
+              </h5>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-secondary" id="clearOutput">
+                  <i class="fa fa-trash me-1"></i>Clear
+                </button>
+                <button class="btn btn-sm btn-info" id="exportOutput">
+                  <i class="fa fa-download me-1"></i>Export
+                </button>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <div class="output-container" id="outputContainer">
+                <div class="output-entry">
+                  <div class="output-timestamp">[Ready]</div>
+                  <div>Migration output console initialized. Run migrations using "Update DB" buttons to see output
+                    here.</div>
                 </div>
               </div>
             </div>
