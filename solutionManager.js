@@ -21,6 +21,7 @@ class SolutionManager {
             SIT: { name: 'SIT', branch: 'master_sit' },
             UAT: { name: 'UAT', branch: 'master_uat' }
         };
+        this.collapsedGroups = new Set(); // Track collapsed groups
         this.init();
     }
 
@@ -119,6 +120,11 @@ class SolutionManager {
             this.solutions = config.solutions || [];
             rootPathGlobal = this.resolvePath(config.rootPath || '');
             console.log('Resolved root path:', rootPathGlobal);
+            
+            // Reset collapsed groups and pagination on load
+            this.collapsedGroups.clear();
+            this.currentPage = 1;
+            
             this.totalPages = Math.ceil(this.solutions.length / this.itemsPerPage);
             console.log(`Loaded ${this.solutions.length} solutions, ${this.totalPages} pages total`);
             this.displaySolutions();
@@ -138,37 +144,175 @@ class SolutionManager {
         console.log(`Displaying solutions for page ${this.currentPage}`);
         container.innerHTML = '';
 
-        // Calculate page slice
-        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-        const endIndex = Math.min(startIndex + this.itemsPerPage, this.solutions.length);
-        const currentSolutions = this.solutions.slice(startIndex, endIndex);
+        // Get all groups with their solutions, showing headers for all but only visible solutions
+        const { groupsToShow, visibleCount } = this.calculateGroupsToDisplay();
 
-        // Group and display solutions
-        const groupedSolutions = this.groupSolutionsByParent(currentSolutions);
-        Object.entries(groupedSolutions).forEach(([parentDir, solutions]) => {
-            container.appendChild(this.createGroupElement(parentDir, solutions));
+        // Display all groups (collapsed or not) with their solutions
+        groupsToShow.forEach(({ parentDir, solutions, isCollapsed }) => {
+            container.appendChild(this.createGroupElement(parentDir, solutions, isCollapsed));
         });
 
-        // Add pagination controls
-        this.addPaginationControls(container);
+        // Add pagination controls only if no groups are expanded
+        // When groups are expanded, we show all solutions, so no pagination needed
+        const hasExpandedGroups = this.collapsedGroups.size < Object.keys(this.groupSolutionsByParent(this.solutions)).length;
+        if (!hasExpandedGroups) {
+            this.addPaginationControls(container, visibleCount);
+        }
 
         // Set up checkbox listeners and update counter
         setTimeout(() => {
             this.setupCheckboxListeners();
             this.updateSelectedCount();
+            this.updateGroupCheckboxes();
         }, 100);
     }
 
-    createGroupElement(parentDir, solutions) {
+    calculateGroupsToDisplay() {
+        const grouped = this.groupSolutionsByParent(this.solutions);
+        const allGroups = Object.entries(grouped);
+        const groupsToShow = [];
+        let visibleCount = 0;
+        
+        // Collect all expanded groups
+        const expandedGroups = [];
+        for (const [parentDir, solutions] of allGroups) {
+            if (!this.collapsedGroups.has(parentDir)) {
+                expandedGroups.push({ parentDir, solutions });
+            }
+        }
+        
+        // If we have expanded groups, show ALL solutions from ALL expanded groups
+        // Don't paginate within groups - show complete groups
+        if (expandedGroups.length > 0) {
+            // Show all groups (expanded and collapsed)
+            for (const [parentDir, solutions] of allGroups) {
+                const isCollapsed = this.collapsedGroups.has(parentDir);
+                
+                if (isCollapsed) {
+                    // Collapsed group: show header, but no solutions
+                    groupsToShow.push({
+                        parentDir,
+                        solutions: [],
+                        isCollapsed: true
+                    });
+                } else {
+                    // Expanded group: show ALL solutions from this group
+                    groupsToShow.push({
+                        parentDir,
+                        solutions: solutions, // Show all solutions, not paginated
+                        isCollapsed: false
+                    });
+                    visibleCount += solutions.length;
+                }
+            }
+        } else {
+            // No groups expanded - show all groups as collapsed
+            for (const [parentDir, solutions] of allGroups) {
+                groupsToShow.push({
+                    parentDir,
+                    solutions: [],
+                    isCollapsed: true
+                });
+            }
+        }
+        
+        return { groupsToShow, visibleCount };
+    }
+
+    createGroupElement(parentDir, solutions, isCollapsed = false) {
         const groupDiv = document.createElement('div');
         groupDiv.classList.add('parent-directory', 'mb-4');
+        groupDiv.dataset.groupName = parentDir;
 
-        const header = document.createElement('h3');
-        header.textContent = parentDir;
-        header.classList.add('mb-3');
+        // Create header with checkbox, title, and collapse/expand button
+        const header = document.createElement('div');
+        header.classList.add('group-header', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-3');
+        
+        // Left side: Checkbox and title
+        const leftSection = document.createElement('div');
+        leftSection.classList.add('d-flex', 'align-items-center', 'gap-2');
+        
+        // Add "Select All" checkbox for this group
+        const groupCheckboxWrapper = document.createElement('div');
+        groupCheckboxWrapper.classList.add('form-check');
+        
+        const groupCheckbox = document.createElement('input');
+        groupCheckbox.type = 'checkbox';
+        groupCheckbox.classList.add('form-check-input', 'group-select-all');
+        groupCheckbox.id = `group-checkbox-${parentDir}`;
+        groupCheckbox.dataset.groupName = parentDir;
+        groupCheckbox.onchange = () => this.toggleGroupSelection(parentDir, groupCheckbox);
+        groupCheckboxWrapper.appendChild(groupCheckbox);
+        
+        const groupCheckboxLabel = document.createElement('label');
+        groupCheckboxLabel.classList.add('form-check-label');
+        groupCheckboxLabel.htmlFor = groupCheckbox.id;
+        groupCheckboxLabel.textContent = 'Select All';
+        groupCheckboxLabel.style.cursor = 'pointer';
+        groupCheckboxWrapper.appendChild(groupCheckboxLabel);
+        
+        leftSection.appendChild(groupCheckboxWrapper);
+        
+        const title = document.createElement('h3');
+        title.textContent = parentDir;
+        title.classList.add('mb-0', 'ms-2');
+        leftSection.appendChild(title);
+        
+        header.appendChild(leftSection);
+
+        // Right side: Collapse/expand button
+        const collapseBtn = document.createElement('button');
+        collapseBtn.classList.add('btn', 'btn-sm', 'btn-secondary', 'collapse-toggle');
+        collapseBtn.innerHTML = isCollapsed 
+            ? '<i class="fa fa-chevron-right"></i>' 
+            : '<i class="fa fa-chevron-down"></i>';
+        collapseBtn.onclick = () => this.toggleGroupCollapse(groupDiv, collapseBtn, parentDir);
+        header.appendChild(collapseBtn);
+
         groupDiv.appendChild(header);
 
-        groupDiv.appendChild(this.createSolutionsTable(solutions));
+        // Create table wrapper that can be collapsed
+        const tableWrapper = document.createElement('div');
+        tableWrapper.classList.add('group-content');
+        if (isCollapsed) {
+            tableWrapper.classList.add('collapsed');
+        }
+        
+        // Always create table structure, even if empty (for expanded groups)
+        // This ensures the group looks properly expanded even if no solutions on current page
+        if (!isCollapsed) {
+            // Wrap table in table-responsive for better scrolling
+            const tableResponsive = document.createElement('div');
+            tableResponsive.classList.add('table-responsive');
+            
+            if (solutions.length > 0) {
+                tableResponsive.appendChild(this.createSolutionsTable(solutions));
+            } else {
+                // Create empty table structure to show the group is expanded
+                const emptyTable = document.createElement('table');
+                emptyTable.classList.add('table', 'table-striped', 'table-hover');
+                emptyTable.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="width: 60%">Solution Name</th>
+                            <th style="width: 40%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                No solutions on this page. Navigate to next page to see solutions.
+                            </td>
+                        </tr>
+                    </tbody>
+                `;
+                tableResponsive.appendChild(emptyTable);
+            }
+            tableWrapper.appendChild(tableResponsive);
+        }
+        
+        groupDiv.appendChild(tableWrapper);
+
         return groupDiv;
     }
 
@@ -335,7 +479,7 @@ class SolutionManager {
         return container;
     }
 
-    addPaginationControls(container) {
+    addPaginationControls(container, visibleCount = null) {
         const paginationDiv = document.createElement('div');
         paginationDiv.classList.add(
             'pagination-controls',
@@ -345,9 +489,13 @@ class SolutionManager {
             'mt-4'
         );
 
+        // Calculate total pages based on visible (non-collapsed) solutions
+        const totalVisibleSolutions = this.getTotalVisibleSolutions();
+        const totalPages = Math.ceil(totalVisibleSolutions / this.itemsPerPage);
+
         // Page information
         const pageInfo = document.createElement('div');
-        pageInfo.textContent = `Page ${this.currentPage} of ${this.totalPages}`;
+        pageInfo.textContent = `Page ${this.currentPage} of ${totalPages} (${visibleCount || this.itemsPerPage} items)`;
         paginationDiv.appendChild(pageInfo);
 
         // Navigation buttons
@@ -365,7 +513,7 @@ class SolutionManager {
             buttonsDiv.appendChild(prevBtn);
         }
 
-        if (this.currentPage < this.totalPages) {
+        if (this.currentPage < totalPages) {
             const nextBtn = document.createElement('button');
             nextBtn.classList.add('btn', 'btn-secondary');
             nextBtn.textContent = 'Next';
@@ -378,6 +526,20 @@ class SolutionManager {
 
         paginationDiv.appendChild(buttonsDiv);
         container.appendChild(paginationDiv);
+    }
+
+    getTotalVisibleSolutions() {
+        // Count only solutions in non-collapsed groups
+        let count = 0;
+        const grouped = this.groupSolutionsByParent(this.solutions);
+        
+        for (const [parentDir, solutions] of Object.entries(grouped)) {
+            if (!this.collapsedGroups.has(parentDir)) {
+                count += solutions.length;
+            }
+        }
+        
+        return count;
     }
 
     groupSolutionsByParent(solutions) {
@@ -398,25 +560,93 @@ class SolutionManager {
         }, {});
     }
 
+    toggleGroupCollapse(groupDiv, button, parentDir) {
+        const content = groupDiv.querySelector('.group-content');
+        const isCollapsed = content.classList.contains('collapsed');
+        const groupSolutions = this.getGroupSolutions(parentDir);
+        const groupSolutionCount = groupSolutions.length;
+
+        if (isCollapsed) {
+            // Expanding the group
+            this.collapsedGroups.delete(parentDir);
+        } else {
+            // Collapsing the group
+            this.collapsedGroups.add(parentDir);
+        }
+        
+        // Don't reset pagination - just recalculate and redisplay
+        // This allows multiple groups to be expanded at the same time
+        this.displaySolutions();
+    }
+
+    toggleGroupSelection(parentDir, checkbox) {
+        // Get all solutions in this group
+        const groupSolutions = this.getGroupSolutions(parentDir);
+        
+        // Get all checkboxes for solutions in this group
+        const allCheckboxes = document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)');
+        const groupCheckboxes = Array.from(allCheckboxes).filter(cb => {
+            const solution = this.solutions.find(s => {
+                const normalizedPath = path.normalize(s.path.replace(/\\/g, '/'));
+                const parts = normalizedPath.split('/');
+                return parts[0] === parentDir && cb.value === s.path;
+            });
+            return solution !== undefined;
+        });
+        
+        // Set all group checkboxes to match the group checkbox
+        groupCheckboxes.forEach(cb => {
+            cb.checked = checkbox.checked;
+        });
+        
+        // Update the selected count
+        this.updateSelectedCount();
+    }
+
+    getGroupSolutions(parentDir) {
+        return this.solutions.filter(solution => {
+            const normalizedPath = path.normalize(solution.path.replace(/\\/g, '/'));
+            return normalizedPath.split('/')[0] === parentDir;
+        });
+    }
+
+    getCurrentVisibleCount() {
+        const container = document.getElementById("solutionsContainer");
+        if (!container) return 0;
+        
+        let count = 0;
+        const groups = container.querySelectorAll('.parent-directory');
+        groups.forEach(group => {
+            const isCollapsed = group.querySelector('.group-content.collapsed');
+            if (!isCollapsed) {
+                const rows = group.querySelectorAll('tbody tr');
+                count += rows.length;
+            }
+        });
+        return count;
+    }
+
     resetSelections() {
         console.log('Resetting all selections');
-        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)').forEach(checkbox => {
             checkbox.checked = false;
         });
         this.updateSelectedCount();
+        this.updateGroupCheckboxes();
     }
 
     selectAll() {
         console.log('Selecting all solutions');
-        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)').forEach(checkbox => {
             checkbox.checked = true;
         });
         this.updateSelectedCount();
+        this.updateGroupCheckboxes();
     }
 
     async getLatestForSelected() {
         try {
-            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked:not(.group-select-all)');
 
             if (selectedCheckboxes.length === 0) {
                 this.showNotification('Warning', 'Please select at least one solution', 'warning');
@@ -621,7 +851,7 @@ class SolutionManager {
 
     async runSelectedSolutions() {
         try {
-            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked:not(.group-select-all)');
             console.log(`Found ${selectedCheckboxes.length} selected solutions`);
 
             if (selectedCheckboxes.length === 0) {
@@ -769,8 +999,8 @@ class SolutionManager {
         console.log('🧪 DEBUG: Simulating CLI execution...');
 
         // Check current checkbox states
-        const allCheckboxes = document.querySelectorAll('input[type="checkbox"]');
-        const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        const allCheckboxes = document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)');
+        const checkedBoxes = document.querySelectorAll('input[type="checkbox"]:checked:not(.group-select-all)');
 
         console.log(`📊 Found ${allCheckboxes.length} total checkboxes, ${checkedBoxes.length} checked`);
 
@@ -791,7 +1021,7 @@ class SolutionManager {
 
         try {
             console.log('🔍 Querying for checkboxes...');
-            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked:not(.group-select-all)');
             console.log(`Found ${selectedCheckboxes.length} selected solutions for CLI execution`);
             console.log('Selected checkboxes:', Array.from(selectedCheckboxes).map(cb => ({
                 id: cb.id,
@@ -1532,7 +1762,7 @@ class SolutionManager {
     }
 
     updateSelectedCount() {
-        const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedCheckboxes = document.querySelectorAll('input[type="checkbox"]:checked:not(.group-select-all)');
         const countElement = document.getElementById('selectedCount');
         if (countElement) {
             countElement.textContent = selectedCheckboxes.length;
@@ -1542,12 +1772,52 @@ class SolutionManager {
 
     setupCheckboxListeners() {
         // Add event listeners to all checkboxes to update the counter
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)');
         checkboxes.forEach(checkbox => {
             checkbox.addEventListener('change', () => {
                 this.updateSelectedCount();
+                this.updateGroupCheckboxes();
             });
         });
+        
+        // Update group checkboxes state
+        this.updateGroupCheckboxes();
+    }
+
+    updateGroupCheckboxes() {
+        // Update each group checkbox based on whether all solutions in that group are selected
+        const grouped = this.groupSolutionsByParent(this.solutions);
+        
+        for (const [parentDir, solutions] of Object.entries(grouped)) {
+            const groupCheckbox = document.getElementById(`group-checkbox-${parentDir}`);
+            if (!groupCheckbox) continue;
+            
+            // Get all solution checkboxes in this group
+            const allCheckboxes = document.querySelectorAll('input[type="checkbox"]:not(.group-select-all)');
+            const groupCheckboxes = Array.from(allCheckboxes).filter(cb => {
+                const solution = solutions.find(s => cb.value === s.path);
+                return solution !== undefined;
+            });
+            
+            if (groupCheckboxes.length === 0) {
+                groupCheckbox.indeterminate = false;
+                groupCheckbox.checked = false;
+                continue;
+            }
+            
+            const checkedCount = groupCheckboxes.filter(cb => cb.checked).length;
+            
+            if (checkedCount === 0) {
+                groupCheckbox.indeterminate = false;
+                groupCheckbox.checked = false;
+            } else if (checkedCount === groupCheckboxes.length) {
+                groupCheckbox.indeterminate = false;
+                groupCheckbox.checked = true;
+            } else {
+                groupCheckbox.indeterminate = true;
+                groupCheckbox.checked = false;
+            }
+        }
     }
 
     findRunnableProjects(solutionFilePath) {

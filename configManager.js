@@ -1,14 +1,22 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron').remote || require('@electron/remote');
 const os = require('os');
+
+// Try to get app from remote, with fallback
+let app;
+try {
+    app = require('electron').remote?.app || require('@electron/remote')?.app;
+} catch (e) {
+    // If remote is not available, we'll use fallback paths
+    console.warn('Remote app not available, using fallback paths');
+}
 
 class ConfigManager {
     constructor() {
         // Initialize paths
         this.appDir = this.getAppDataPath();
         this.configPath = path.join(this.appDir, 'config.json');
-        this.templatePath = path.join(__dirname, 'config.template.json');
+        this.templatePath = this.getTemplatePath();
 
         // Ensure user data directory exists
         if (!fs.existsSync(this.appDir)) {
@@ -22,15 +30,24 @@ class ConfigManager {
     getAppDataPath() {
         try {
             // Get app name from package.json
-            const packageJson = require('./package.json');
-            const appName = packageJson.build.productName;
-
-            // In development, use electron's userData
-            if (process.env.NODE_ENV === 'development') {
-                return app.getPath('userData');
+            let appName = 'Amwal Pay Launcher';
+            try {
+                const packageJson = require('./package.json');
+                appName = packageJson.build?.productName || packageJson.name || appName;
+            } catch (e) {
+                console.warn('Could not load package.json, using default app name');
             }
 
-            // In production, use platform-specific paths
+            // Try to use app.getPath if available
+            if (app && typeof app.getPath === 'function') {
+                try {
+                    return app.getPath('userData');
+                } catch (e) {
+                    console.warn('Could not use app.getPath, using fallback');
+                }
+            }
+
+            // Fallback to platform-specific paths
             const platform = process.platform;
 
             switch (platform) {
@@ -41,13 +58,38 @@ class ConfigManager {
                 case 'linux': // Linux
                     return path.join(os.homedir(), '.config', appName.toLowerCase().replace(/ /g, '-'));
                 default:
-                    return app.getPath('userData');
+                    // Final fallback
+                    return path.join(os.homedir(), '.config', appName.toLowerCase().replace(/ /g, '-'));
             }
         } catch (error) {
             console.error('Error getting app data path:', error);
-            // Fallback to electron's userData path
-            return app.getPath('userData');
+            // Final fallback
+            return path.join(os.homedir(), '.config', 'amwal-pay-launcher');
         }
+    }
+
+    getTemplatePath() {
+        // In packaged apps, __dirname points to app.asar
+        // We need to check if we're in an asar archive
+        let templatePath = path.join(__dirname, 'config.template.json');
+        
+        // Check if we're in an asar archive
+        if (__dirname.includes('.asar')) {
+            // In asar, files are read-only, so we can't write there
+            // But we can read the template from asar
+            if (fs.existsSync(templatePath)) {
+                return templatePath;
+            }
+        } else {
+            // In development or unpacked, use normal path
+            if (fs.existsSync(templatePath)) {
+                return templatePath;
+            }
+        }
+        
+        // If template doesn't exist, return the path anyway
+        // The code will handle creating a default config
+        return templatePath;
     }
 
     initializeConfig() {
@@ -114,11 +156,31 @@ class ConfigManager {
 
             // Try to load from template if it exists
             if (fs.existsSync(this.templatePath)) {
-                console.log('Using template file from:', this.templatePath);
-                const templateData = fs.readFileSync(this.templatePath, 'utf8');
-                const templateConfig = JSON.parse(templateData);
-                this.saveConfig(templateConfig);
-                return templateConfig;
+                try {
+                    console.log('Using template file from:', this.templatePath);
+                    const templateData = fs.readFileSync(this.templatePath, 'utf8');
+                    const templateConfig = JSON.parse(templateData);
+                    this.saveConfig(templateConfig);
+                    return templateConfig;
+                } catch (error) {
+                    console.warn('Error reading template file, using default config:', error.message);
+                }
+            } else {
+                console.log('Template file not found at:', this.templatePath);
+            }
+
+            // Also try to load from the original config.json in the app directory (for migration)
+            const originalConfigPath = path.join(__dirname, 'config.json');
+            if (fs.existsSync(originalConfigPath) && !originalConfigPath.includes('.asar')) {
+                try {
+                    console.log('Found config.json in app directory, copying to user data:', originalConfigPath);
+                    const originalConfigData = fs.readFileSync(originalConfigPath, 'utf8');
+                    const originalConfig = JSON.parse(originalConfigData);
+                    this.saveConfig(originalConfig);
+                    return originalConfig;
+                } catch (error) {
+                    console.warn('Error reading original config.json, using default config:', error.message);
+                }
             }
 
             // Create default config if no template exists
