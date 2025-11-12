@@ -80,12 +80,14 @@ ipcMain.on('debug-log', (event, message) => {
 });
 
 // Handle terminal launching in main process
-ipcMain.handle('launch-terminal', async (event, { solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, runArgs }) => {
+ipcMain.handle('launch-terminal', async (event, { solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, runArgs, args, startup }) => {
     console.log(`[Main Process] Launching terminal for: ${solutionName} at ${solutionPath}`);
     console.log(`[Main Process] Solution type: ${solutionType}`);
 
     try {
-        const result = await launchTerminalInMainProcess(solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, runArgs);
+        // Support both 'args' and 'runArgs' for backward compatibility
+        const commandArgs = args || runArgs;
+        const result = await launchTerminalInMainProcess(solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, commandArgs, startup);
         console.log(`[Main Process] Terminal launch result:`, result);
         return result;
     } catch (error) {
@@ -95,7 +97,7 @@ ipcMain.handle('launch-terminal', async (event, { solutionPath, solutionName, pl
 });
 
 // Terminal launching function in main process
-async function launchTerminalInMainProcess(solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, runArgs) {
+async function launchTerminalInMainProcess(solutionPath, solutionName, platform, solutionType, dockerPort, startupProject, runArgs, startup) {
     return new Promise((resolve, reject) => {
         console.log(`[Main Process] Platform: ${platform}, Solution: ${solutionName}, Type: ${solutionType}`);
 
@@ -130,8 +132,15 @@ async function launchTerminalInMainProcess(solutionPath, solutionName, platform,
         
         console.log(`[Main Process] Solution directory: ${solutionDir}`);
 
-        // Generate startup command based on solution type
-        const startupCommand = generateStartupCommand(solutionType, solutionDir, solutionPath, startupProject, runArgs, dockerPort);
+        // If 'startup' is provided, use it directly to override the generated command
+        let startupCommand;
+        if (startup) {
+            console.log(`[Main Process] Using custom startup command: ${startup}`);
+            startupCommand = startup;
+        } else {
+            // Generate startup command based on solution type
+            startupCommand = generateStartupCommand(solutionType, solutionDir, solutionPath, startupProject, runArgs, dockerPort);
+        }
         console.log(`[Main Process] Startup command: ${startupCommand}`);
 
         let command, args;
@@ -349,19 +358,13 @@ function generateStartupCommand(solutionType, solutionDir, solutionPath, startup
         case 'dotnet':
             // For .NET solutions, use dotnet run with startup project if specified
             if (startupProject) {
-                // If startupProject is relative, resolve it from the root Work directory, not solutionDir
+                // startupProject should be relative to solutionDir
                 let projectPath;
                 if (path.isAbsolute(startupProject)) {
                     projectPath = startupProject;
                 } else {
-                    // Extract root path from solutionDir (assuming it contains 'Work')
-                    const workIndex = solutionDir.indexOf('/Work/');
-                    if (workIndex !== -1) {
-                        const rootPath = solutionDir.substring(0, workIndex + 6); // Include '/Work/'
-                        projectPath = path.join(rootPath, startupProject);
-                    } else {
-                        projectPath = path.join(solutionDir, startupProject);
-                    }
+                    // Resolve relative to solution directory
+                    projectPath = path.join(solutionDir, startupProject);
                 }
 
                 console.log(`[Main Process] Using startup project: ${projectPath}`);
@@ -393,12 +396,20 @@ function generateStartupCommand(solutionType, solutionDir, solutionPath, startup
             }
 
         case 'nodejs':
-            // For Node.js projects, check for package.json and run appropriate command
-            return `if [ -f "package.json" ]; then if [ -f "package-lock.json" ]; then echo "Starting with npm..." && npm start; elif [ -f "yarn.lock" ]; then echo "Starting with yarn..." && yarn start; else echo "Starting with npm..." && npm start; fi; else echo "No package.json found in $(pwd)"; fi`;
+            // For Node.js projects, check for package.json and run appropriate command with optional args
+            if (runArgs) {
+                return `if [ -f "package.json" ]; then if [ -f "package-lock.json" ]; then echo "Starting with npm..." && npm start -- ${runArgs}; elif [ -f "yarn.lock" ]; then echo "Starting with yarn..." && yarn start ${runArgs}; else echo "Starting with npm..." && npm start -- ${runArgs}; fi; else echo "No package.json found in $(pwd)"; fi`;
+            } else {
+                return `if [ -f "package.json" ]; then if [ -f "package-lock.json" ]; then echo "Starting with npm..." && npm start; elif [ -f "yarn.lock" ]; then echo "Starting with yarn..." && yarn start; else echo "Starting with npm..." && npm start; fi; else echo "No package.json found in $(pwd)"; fi`;
+            }
 
         case 'angular':
-            // For Angular projects, try ng serve
-            return `if [ -f "angular.json" ] || [ -f ".angular-cli.json" ]; then echo "Starting Angular project..." && ng serve; elif [ -f "package.json" ]; then echo "Starting with npm..." && npm start; else echo "No Angular or package.json found in $(pwd)"; fi`;
+            // For Angular projects, try ng serve with optional args
+            if (runArgs) {
+                return `if [ -f "angular.json" ] || [ -f ".angular-cli.json" ]; then echo "Starting Angular project..." && ng serve ${runArgs}; elif [ -f "package.json" ]; then echo "Starting with npm..." && npm start; else echo "No Angular or package.json found in $(pwd)"; fi`;
+            } else {
+                return `if [ -f "angular.json" ] || [ -f ".angular-cli.json" ]; then echo "Starting Angular project..." && ng serve; elif [ -f "package.json" ]; then echo "Starting with npm..." && npm start; else echo "No Angular or package.json found in $(pwd)"; fi`;
+            }
 
         case 'docker':
             // For Docker projects

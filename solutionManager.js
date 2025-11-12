@@ -1130,6 +1130,7 @@ class SolutionManager {
             console.log(`� [Renderer] Sending terminal launch request to main process...`);
 
             // Send IPC message to main process to launch terminal
+            // Support both 'args' and 'runArgs' for backward compatibility
             const result = await ipcRendererInstance.invoke('launch-terminal', {
                 solutionPath: solutionPath,
                 solutionName: solution.name,
@@ -1137,7 +1138,9 @@ class SolutionManager {
                 solutionType: solution.type,
                 dockerPort: solution.dockerPort,
                 startupProject: solution.startupProject,
-                runArgs: solution.runArgs
+                runArgs: solution.runArgs || solution.args, // Support both 'args' and 'runArgs'
+                args: solution.args || solution.runArgs, // Support both 'args' and 'runArgs'
+                startup: solution.startup // Optional: full command override
             });
 
             console.log(`� [Renderer] Received response from main process:`, result);

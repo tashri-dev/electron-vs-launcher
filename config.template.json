@@ -10,7 +10,19 @@
             "contextFolder": "ExamplePath",
             "imageContainerName": "example-solution",
             "startupProject": "ExamplePath\\API\\ExampleAPI.csproj",
-            "runArgs": "--environment Development --urls http://localhost:5000"
+            "args": "--environment Development --urls http://localhost:5000"
+        },
+        {
+            "name": "Example Angular App",
+            "path": "ExamplePath\\AngularApp",
+            "type": "angular",
+            "args": "--ssl --ssl-cert src/portal.crt --ssl-key src/portal.key"
+        },
+        {
+            "name": "Example Custom Command",
+            "path": "ExamplePath\\CustomApp",
+            "type": "nodejs",
+            "startup": "npm run dev -- --port 3000 --host 0.0.0.0"
         }
     ]
 }
