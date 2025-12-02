@@ -106,12 +106,11 @@
       "runArgs": ""
     },
     {
-      "name": "APG Merchant App Gateway",
-      "path": "APG/APG.MerchantAppAPIGateway/APGMerchantAppAPIGateway.sln",
+      "name": "APG Merchant App Gateway (POS)",
+      "path": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
       "type": "dotnet",
-      "contextFolder": "APG.MerchantAppAPIGateway",
-      "startupProject": "APGMerchantAppAPIs/APGMerchantAppAPIs.csproj",
-      "args": "", 
+      "startupProject": "src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+      "args": "--launch-profile 'APG.POS'",
       "runArgs": ""
     },
     {
@@ -280,7 +279,7 @@
       "name": "SRM Portal",
       "path": "SRM/SRM.Portal",
       "type": "angular",
-      "args": ""
+      "args": "--ssl --ssl-cert src/portal.crt --ssl-key src/portal.key"
     },
     {
       "name": "SRM Portal Proxy",
@@ -296,6 +295,61 @@
       "contextFolder": "SRM.PortalAPIGateway",
       "imageContainerName": "srm-portal-gateway",
       "startupProject": "SRM.PortalAPIs",
+      "args": "",
+      "runArgs": ""
+    },
+    {
+      "name": "TMS Fundamentals",
+      "path": "TMS/TMS.Fundamentals/TMS.Fundamentals.sln",
+      "type": "dotnet",
+      "migratorPath": "TMS/TMS.Fundamentals/src/TMS.Fundamentals.MigrationTools/TMS.Fundamentals.MigrationTools.csproj",
+      "contextFolder": "TMS.Fundamentals",
+      "imageContainerName": "tms-fundamentals",
+      "startupProject": "src/TMS.Fundamentals.Services.Api/TMS.Fundamentals.Services.Api.csproj",
+      "args": "",
+      "runArgs": ""
+    },
+    {
+      "name": "TMS Membership",
+      "path": "TMS/TMS.Membership/TMS.Membership.sln",
+      "type": "dotnet",
+      "migratorPath": "TMS/TMS.Membership/src/TMS.Membership.MigrationTools/TMS.Membership.MigrationTools.csproj",
+      "contextFolder": "TMS.Membership",
+      "imageContainerName": "tms-membership",
+      "startupProject": "src/TMS.Membership.Services.Api/TMS.Membership.Services.Api.csproj",
+      "args": "",
+      "runArgs": ""
+    },
+    {
+      "name": "TMS Portal API Gateway",
+      "path": "TMS/TMS.PortalAPIGateway/TMS.PortalAPIGateway.sln",
+      "type": "dotnet",
+      "contextFolder": "TMS.PortalAPIGateway",
+      "imageContainerName": "tms-portal-gateway",
+      "startupProject": "TMS.PortalAPIs/TMS.PortalAPIs.csproj",
+      "args": "",
+      "runArgs": ""
+    },
+    {
+      "name": "TMS Portal",
+      "path": "TMS/TMS.Portal",
+      "type": "angular",
+      "args": "--ssl --ssl-cert src/portal.crt --ssl-key src/portal.key"
+    },
+    {
+      "name": "TMS Portal Proxy",
+      "path": "TMS/TMS.Portal.Proxy",
+      "type": "nodejs",
+      "args": "",
+      "startup": ""
+    },
+    {
+      "name": "KMS API Gateway",
+      "path": "TMS/KMS.APIGateway/KMS.APIGateway.sln",
+      "type": "dotnet",
+      "contextFolder": "KMS.APIGateway",
+      "imageContainerName": "kms-api-gateway",
+      "startupProject": "KMS.APIs/KMS.APIs.csproj",
       "args": "",
       "runArgs": ""
     }

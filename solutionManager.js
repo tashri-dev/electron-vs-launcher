@@ -458,6 +458,16 @@ class SolutionManager {
         };
         container.appendChild(runBtn);
 
+        // Run in CLI button
+        const runCliBtn = document.createElement('button');
+        runCliBtn.classList.add('btn', 'btn-info', 'btn-sm', 'btn-priority-high');
+        runCliBtn.innerHTML = '<i class="fa fa-terminal"></i>';
+        runCliBtn.title = 'Run this solution in external terminal';
+        runCliBtn.onclick = () => {
+            this.runSolutionInExternalTerminal(solution);
+        };
+        container.appendChild(runCliBtn);
+
         // Update DB button
         if (solution.migratorPath) {
             const updateDbBtn = document.createElement('button');

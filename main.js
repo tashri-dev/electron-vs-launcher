@@ -148,13 +148,21 @@ async function launchTerminalInMainProcess(solutionPath, solutionName, platform,
         if (platform === 'darwin') {
             // macOS - Use AppleScript to open Terminal
             const escapedPath = solutionDir.replace(/'/g, "'\"'\"'");
-            // Escape the command more carefully for AppleScript
-            const escapedCommand = startupCommand.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "'\"'\"'");
+            // Escape the solution name for AppleScript (contains spaces, parentheses, etc.)
+            const escapedSolutionName = solutionName.replace(/'/g, "'\"'\"'");
+            // Escape the command for AppleScript
+            // The command is inside double quotes in AppleScript, so we need to escape:
+            // - Backslashes
+            // - Double quotes (but not single quotes - they're fine inside double quotes)
+            // Note: We don't escape $ because commands like $(pwd) need to work
+            const escapedCommand = startupCommand
+                .replace(/\\/g, '\\\\')  // Escape backslashes
+                .replace(/"/g, '\\"');    // Escape double quotes only
             const script = `
                 tell application "Terminal"
                     if not (exists window 1) then reopen
                     activate
-                    do script "cd '${escapedPath}' && echo 'Starting ${solutionName} (${solutionType})...' && ${escapedCommand}"
+                    do script "cd '${escapedPath}' && echo 'Starting ${escapedSolutionName} (${solutionType})...' && ${escapedCommand}"
                 end tell
             `;
 
@@ -370,7 +378,9 @@ function generateStartupCommand(solutionType, solutionDir, solutionPath, startup
                 console.log(`[Main Process] Using startup project: ${projectPath}`);
 
                 if (runArgs) {
-                    return `dotnet run --project "${projectPath}" ${runArgs}`;
+                    // Remove any existing quotes from args and let the shell handle them
+                    const cleanArgs = runArgs.trim();
+                    return `dotnet run --project "${projectPath}" ${cleanArgs}`;
                 } else {
                     return `dotnet run --project "${projectPath}"`;
                 }
