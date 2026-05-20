@@ -117,6 +117,82 @@
                     "solutionPath": "APG.eCommerceSmartbox.Proxy",
                     "startupProject": "APG.eCommerceSmartbox.Proxy",
                     "npmScript": "start"
+                },
+                {
+                    "name": "Amwal File Manager",
+                    "category": "node",
+                    "solutionPath": "Amwal.FileManager",
+                    "startupProject": "Amwal.FileManager",
+                    "npmScript": "start"
+                }
+            ]
+        },
+        {
+            "title": "Merchant API Gateways",
+            "solutions": [
+                {
+                    "name": "APG Merchant App API",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "MerchantAppAPI-Development",
+                    "aspnetCoreUrls": "https://localhost:7034;http://localhost:5020"
+                },
+                {
+                    "name": "APG E-Commerce SDK",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "ECommerceSDK-Development",
+                    "aspnetCoreUrls": "https://localhost:7035;http://localhost:5021"
+                },
+                {
+                    "name": "APG Webhook",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "Webhook-Development",
+                    "aspnetCoreUrls": "https://localhost:7036;http://localhost:5023"
+                },
+                {
+                    "name": "APG SoftPOS",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "SoftPOS-Development",
+                    "aspnetCoreUrls": "https://localhost:7037;http://localhost:5024"
+                },
+                {
+                    "name": "APG POS",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "POS-Development",
+                    "aspnetCoreUrls": "https://localhost:7038;http://localhost:5025"
+                },
+                {
+                    "name": "APG Zid",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "Zid-Development",
+                    "aspnetCoreUrls": "https://localhost:7038;http://localhost:5025"
+                },
+                {
+                    "name": "APG Visa KIC",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "VisaKIC-Development",
+                    "aspnetCoreUrls": "https://localhost:7039;http://localhost:5024"
+                },
+                {
+                    "name": "APG SoftPOS SDK",
+                    "category": "dotnet",
+                    "solutionPath": "APG.MerchantAppApiGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG.MerchantAppApiGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "SoftPOSSDK-Development",
+                    "aspnetCoreUrls": "https://localhost:7040;http://localhost:5024"
                 }
             ]
         },

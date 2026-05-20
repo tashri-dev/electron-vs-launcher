@@ -303,7 +303,13 @@ function launchSelectedSolutionsOnCLI() {
   document
     .querySelectorAll('input[type="checkbox"]:checked')
     .forEach((checkbox) => {
-      launchOnCLI(checkbox.data, checkbox._category, checkbox._npmScript);
+      launchOnCLI(
+        checkbox.data,
+        checkbox._category,
+        checkbox._npmScript,
+        checkbox._aspnetCoreEnvironment,
+        checkbox._aspnetCoreUrls
+      );
     });
 }
 
@@ -444,7 +450,13 @@ function updateDb(migratorRelativePath) {
 
 
 
-function launchOnCLI(startupProject, category, npmScript) {
+function launchOnCLI(
+  startupProject,
+  category,
+  npmScript,
+  aspnetCoreEnvironment,
+  aspnetCoreUrls
+) {
   try {
     const startupProjectPath = path.resolve(startupProject);
     const cat = category || "dotnet";
@@ -481,8 +493,16 @@ function launchOnCLI(startupProject, category, npmScript) {
       return;
     }
 
+    let envExports = "";
+    if (aspnetCoreEnvironment) {
+      envExports += `export ASPNETCORE_ENVIRONMENT="${aspnetCoreEnvironment}"; `;
+    }
+    if (aspnetCoreUrls) {
+      envExports += `export ASPNETCORE_URLS="${aspnetCoreUrls}"; `;
+    }
+
     // AppleScript to open Terminal and run the command
-    const command = `"${dotnetPath}" run --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
+    const command = `${envExports}"${dotnetPath}" run --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
     const osaScript = [
       'tell application "Terminal"',
       `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
@@ -551,6 +571,8 @@ function createSolutionsTable(solutions, rootPath) {
     checkbox.data = path.join(rootPath, solution.startupProject);
     checkbox._category = solution.category || "dotnet";
     checkbox._npmScript = solution.npmScript || "start";
+    checkbox._aspnetCoreEnvironment = solution.aspnetCoreEnvironment || "";
+    checkbox._aspnetCoreUrls = solution.aspnetCoreUrls || "";
 
 
     const label = document.createElement("label");
@@ -593,7 +615,9 @@ function createSolutionsTable(solutions, rootPath) {
         launchOnCLI(
           path.join(rootPath, solution.startupProject),
           solution.category,
-          solution.npmScript
+          solution.npmScript,
+          solution.aspnetCoreEnvironment,
+          solution.aspnetCoreUrls
         );
       runInConsoleTd.appendChild(runInConsoleEl);
     }
