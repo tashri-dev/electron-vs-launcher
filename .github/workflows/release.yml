@@ -89,7 +89,7 @@ jobs:
           make_latest: true
           files: |
             dist/*.dmg
-            dist/*-mac.zip
+            dist/electron-vs-launcher-*.zip
             dist/latest-mac.yml
             dist/*.blockmap
           fail_on_unmatched_files: true
