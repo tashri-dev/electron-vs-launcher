@@ -1,6 +1,6 @@
 {
   "name": "electron-vs-launcher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Amwal Pay Solution Launcher",
   "main": "main.js",
   "scripts": {
