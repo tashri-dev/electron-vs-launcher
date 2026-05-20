@@ -1,0 +1,93 @@
+# Bump semver from conventional commits, build macOS app, publish GitHub Release.
+#
+# Commit message examples (Angular conventions):
+#   fix: ...     → patch  (1.0.0 → 1.0.1)
+#   feat: ...    → minor  (1.0.0 → 1.1.0)
+#   feat!: ...   → major  (1.0.0 → 2.0.0)
+#
+# Tagging: https://github.com/marketplace/actions/github-tag
+# Release assets: electron-builder → GitHub Releases (for electron-updater)
+
+name: Release
+
+on:
+  push:
+    branches:
+      - mac-version
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          release_branches: main,mac-version
+          default_bump: patch
+          tag_prefix: v
+
+      - name: Sync package.json version
+        if: steps.tag_version.outputs.new_version != ''
+        run: node scripts/sync-package-version.js "${{ steps.tag_version.outputs.new_version }}"
+
+      - name: Install dependencies
+        if: steps.tag_version.outputs.new_tag != ''
+        run: npm ci
+
+      - name: Write build metadata
+        if: steps.tag_version.outputs.new_tag != ''
+        run: npm run version:write-meta
+
+      - name: Build and publish to GitHub Releases
+        if: steps.tag_version.outputs.new_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --mac --publish always
+
+      - name: Update release notes
+        if: steps.tag_version.outputs.new_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGELOG: ${{ steps.tag_version.outputs.changelog }}
+        run: |
+          printf '%s\n' "$CHANGELOG" > /tmp/release-notes.md
+          gh release edit "${{ steps.tag_version.outputs.new_tag }}" \
+            --repo "${{ github.repository }}" \
+            --notes-file /tmp/release-notes.md
+
+      - name: Commit version bump
+        if: steps.tag_version.outputs.new_version != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --staged --quiet && exit 0
+          git commit -m "chore: release v${{ steps.tag_version.outputs.new_version }} [skip ci]"
+          git push
+
+      - name: No release (no new tag)
+        if: steps.tag_version.outputs.new_tag == ''
+        run: echo "No new version tag — skipping build (no releasable commits since last tag)."

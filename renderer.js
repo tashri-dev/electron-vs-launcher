@@ -575,3 +575,114 @@ function loadSolutions() {
 }
 
 loadSolutions();
+
+(function initAppVersion() {
+  const { ipcRenderer } = require("electron");
+
+  const versionLabel = document.getElementById("appVersionLabel");
+  const versionSubtitle = document.getElementById("appVersionSubtitle");
+  const versionFooter = document.getElementById("appVersionFooter");
+
+  ipcRenderer.invoke("app:get-version").then((info) => {
+    const tooltip = [
+      info.name,
+      `Version ${info.version}`,
+      info.commit ? `Commit ${info.commit}` : null,
+      info.builtAt ? `Built ${new Date(info.builtAt).toLocaleString()}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (versionLabel) {
+      versionLabel.textContent = info.shortDisplay;
+      versionLabel.title = tooltip;
+    }
+    if (versionSubtitle) {
+      versionSubtitle.textContent = ` · ${info.display}`;
+      versionSubtitle.title = tooltip;
+    }
+    if (versionFooter) {
+      versionFooter.textContent = `${info.name} ${info.display}`;
+      versionFooter.title = tooltip;
+    }
+
+    document.title = `${info.name} · ${info.shortDisplay}`;
+  });
+})();
+
+(function initAppUpdater() {
+  const { ipcRenderer } = require("electron");
+
+  const statusLabel = document.getElementById("updateStatusLabel");
+  const checkBtn = document.getElementById("checkUpdatesBtn");
+  const installBtn = document.getElementById("installUpdateBtn");
+
+  if (!statusLabel || !checkBtn || !installBtn) {
+    return;
+  }
+
+  function setInstallVisible(visible) {
+    installBtn.classList.toggle("d-none", !visible);
+  }
+
+  function setStatusText(text) {
+    statusLabel.textContent = text || "";
+  }
+
+  ipcRenderer.on("updater:status", (_event, payload) => {
+    switch (payload.status) {
+      case "dev":
+        setStatusText("Updates run in packaged builds only");
+        setInstallVisible(false);
+        break;
+      case "checking":
+        setStatusText("Checking for updates…");
+        setInstallVisible(false);
+        break;
+      case "available":
+        setStatusText(`Update v${payload.version} found — downloading…`);
+        setInstallVisible(false);
+        break;
+      case "downloading":
+        setStatusText(`Downloading update… ${Math.round(payload.percent || 0)}%`);
+        setInstallVisible(false);
+        break;
+      case "downloaded":
+        setStatusText(`Update v${payload.version} ready`);
+        setInstallVisible(true);
+        break;
+      case "not-available":
+        setStatusText("You're on the latest version");
+        setInstallVisible(false);
+        break;
+      case "error":
+        setStatusText(payload.message || "Update check failed");
+        setInstallVisible(false);
+        break;
+      default:
+        break;
+    }
+  });
+
+  ipcRenderer.on("updater:progress", (_event, progress) => {
+    setStatusText(`Downloading update… ${Math.round(progress.percent || 0)}%`);
+  });
+
+  checkBtn.addEventListener("click", async () => {
+    checkBtn.disabled = true;
+    setStatusText("Checking for updates…");
+    try {
+      const result = await ipcRenderer.invoke("updater:check");
+      if (result?.status === "dev") {
+        setStatusText("Updates run in packaged builds only");
+        setInstallVisible(false);
+      }
+    } finally {
+      checkBtn.disabled = false;
+    }
+  });
+
+  installBtn.addEventListener("click", () => {
+    ipcRenderer.invoke("updater:install");
+  });
+})();

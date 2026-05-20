@@ -86,6 +86,36 @@ body.app {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.app-updater {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem 0.6rem;
+  max-width: min(100%, 420px);
+}
+
+.app-updater__version {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--brand-muted);
+  letter-spacing: 0.02em;
+}
+
+.app-updater__status {
+  flex: 1 1 100%;
+  font-size: 0.72rem;
+  color: var(--brand-muted);
+  text-align: right;
+  line-height: 1.35;
+}
+
+.app-updater__check[disabled] {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .app-theme-toggle {
@@ -107,6 +137,21 @@ body.app {
   color: var(--brand-muted);
   line-height: 1.45;
   max-width: 36rem;
+}
+
+.app-header__version {
+  font-weight: 600;
+  color: var(--brand-purple-deep);
+  white-space: nowrap;
+}
+
+.app-footer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.25rem 1.5rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--brand-muted);
 }
 
 /* —— Surfaces —— */
@@ -468,4 +513,8 @@ html[data-theme="dark"] .app-accordion .accordion-body .btn-outline-primary {
   --bs-btn-hover-bg: rgba(172, 44, 237, 0.2);
   --bs-btn-hover-color: #fff;
   --bs-btn-hover-border-color: var(--brand-purple);
+}
+
+html[data-theme="dark"] .app-header__version {
+  color: var(--brand-purple-soft);
 }

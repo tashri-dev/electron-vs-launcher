@@ -1,22 +1,44 @@
 {
   "name": "electron-vs-launcher",
   "version": "1.0.0",
-  "description": "",
+  "description": "Amwal Pay Solution Launcher",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "icons": "node scripts/generate-app-icons.js",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:unsigned": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder"
+    "version:show": "node scripts/show-version.js",
+    "version:write-meta": "node scripts/write-version-meta.js",
+    "version:patch": "npm version patch && npm run version:write-meta",
+    "version:minor": "npm version minor && npm run version:write-meta",
+    "version:major": "npm version major && npm run version:write-meta",
+    "pack": "npm run version:write-meta && electron-builder --dir",
+    "dist": "npm run version:write-meta && electron-builder",
+    "dist:unsigned": "npm run version:write-meta && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "publish": "npm run version:write-meta && electron-builder --publish always"
   },
   "build": {
-    "appId": "your.app.id",
+    "appId": "com.amwalpay.solution-launcher",
+    "productName": "Amwal Pay Solution Launcher",
     "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "**/*",
+      "!**/.DS_Store",
+      "!dist/**"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "MahmoudElgml",
+      "repo": "electron-vs-launcher"
+    },
     "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "identity": null
     }
   },
@@ -32,6 +54,7 @@
   "dependencies": {
     "bootstrap": "^5.3.2",
     "electron-notification": "^1.0.0",
+    "electron-updater": "^6.8.3",
     "font-awesome": "^4.7.0"
   }
 }
