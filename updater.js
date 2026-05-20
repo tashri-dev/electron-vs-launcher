@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const { getVersionInfo } = require("./version");
+const userSettings = require("./user-settings");
 
 const UPDATE_CHANNELS = {
   STATUS: "updater:status",
@@ -102,6 +103,36 @@ function registerIpcHandlers() {
     ...getVersionInfo(),
     isPackaged: app.isPackaged,
   }));
+
+  ipcMain.handle("app:get-user-settings", () =>
+    userSettings.getUserSettingsForRenderer()
+  );
+
+  ipcMain.handle("app:set-user-settings", (_event, patch) => {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "rootPath")) {
+      userSettings.setRootPathOverride(patch.rootPath);
+    }
+    return userSettings.getUserSettingsForRenderer();
+  });
+
+  ipcMain.handle("app:open-directory-dialog", async () => {
+    const parentWindow =
+      typeof mainWindow === "function" ? mainWindow() : mainWindow;
+    const parent =
+      parentWindow && !parentWindow.isDestroyed()
+        ? parentWindow
+        : BrowserWindow.getFocusedWindow() || undefined;
+
+    const result = await dialog.showOpenDialog(parent, {
+      properties: ["openDirectory", "createDirectory"],
+    });
+
+    if (result.canceled || !result.filePaths?.length) {
+      return { canceled: true, path: null };
+    }
+
+    return { canceled: false, path: result.filePaths[0] };
+  });
 
   ipcMain.handle("updater:get-version", () => app.getVersion());
 }

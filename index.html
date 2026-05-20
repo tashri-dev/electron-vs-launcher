@@ -37,9 +37,10 @@
               </button>
             </div>
           </div>
-          <button type="button" class="btn btn-sm btn-amwal-outline app-theme-toggle" id="themeToggleBtn"
-            aria-label="Use dark mode" title="Dark mode">
-            <i class="fa fa-moon-o" aria-hidden="true"></i>
+          <button type="button" class="btn btn-sm btn-amwal-outline app-settings-btn" id="openUserSettingsBtn"
+            data-bs-toggle="modal" data-bs-target="#userSettingsModal"
+            aria-label="Settings" title="Settings">
+            <i class="fa fa-cog" aria-hidden="true"></i>
           </button>
         </div>
         <div class="app-updater__status-row">
@@ -96,7 +97,47 @@
     <span id="appVersionFooter"></span>
   </footer>
 
-  <script src="./node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+  <div id="toastHost" class="app-toast-host" aria-live="polite"></div>
+
+  <div class="modal fade app-settings-modal" id="userSettingsModal" tabindex="-1" aria-labelledby="userSettingsModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title fs-5 app-settings-modal-title" id="userSettingsModalLabel">Settings</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label app-settings-field-label" for="themePreferenceSelect">Appearance</label>
+            <select id="themePreferenceSelect" class="form-select form-select-sm app-settings-select">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">Match system</option>
+            </select>
+            <p class="app-settings-hint small mb-0 mt-1">When “Match system” is selected, the window follows macOS or
+              Windows light/dark mode.</p>
+          </div>
+          <hr class="app-settings-divider" />
+          <label class="form-label app-settings-field-label" for="rootPathInput">Repositories root</label>
+          <p class="app-settings-hint small mb-2">Base folder for solutions. Shown paths are combined with this. Stored in
+            app data and kept across updates.</p>
+          <div class="input-group input-group-sm mb-2">
+            <input type="text" class="form-control app-root-path-input font-monospace" id="rootPathInput"
+              spellcheck="false" autocomplete="off" />
+            <button type="button" class="btn btn-outline-secondary app-settings-input-btn" id="browseRootPathBtn">Browse…</button>
+          </div>
+          <div class="d-flex flex-wrap gap-2 justify-content-end">
+            <button type="button" class="btn btn-sm btn-outline-secondary app-settings-action-secondary" id="resetRootPathBtn"
+              title="Clear saved path and use config default">Use default</button>
+            <button type="button" class="btn btn-sm btn-amwal-primary" id="applyRootPathBtn">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
   <script src="./renderer.js"></script>
 </body>
 

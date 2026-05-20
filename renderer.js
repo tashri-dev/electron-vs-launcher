@@ -1,7 +1,229 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { exec, spawn } = require("child_process");
-const rootPathGlobal=''
+
+/** Migrated once to user-settings.json (userData); safe to remove later */
+const LEGACY_ROOT_PATH_STORAGE_KEY = "electron-vs-launcher-root-path";
+
+let effectiveRootPath = "";
+
+function getDefaultRootPath() {
+  return path.join(os.homedir(), "git-repos", "amwal-pay") + path.sep;
+}
+
+function normalizeRootPathString(raw) {
+  let s = String(raw ?? "").trim();
+  if (!s) {
+    return getDefaultRootPath();
+  }
+  if (
+    s === "~" ||
+    s.startsWith("~/") ||
+    s.startsWith("~\\") ||
+    s.startsWith("~" + path.sep)
+  ) {
+    const rest = s === "~" ? "" : s.slice(2);
+    s = path.join(os.homedir(), rest);
+  }
+  const abs = path.resolve(s);
+  return abs.endsWith(path.sep) ? abs : abs + path.sep;
+}
+
+function resolveConfiguredRootPath(configRootPath) {
+  const trimmed = String(configRootPath ?? "").trim();
+  if (!trimmed) {
+    return getDefaultRootPath();
+  }
+  return normalizeRootPathString(trimmed);
+}
+
+function getEffectiveRootPath(configRootPath, userRootPathOverride) {
+  if (
+    userRootPathOverride != null &&
+    String(userRootPathOverride).trim() !== ""
+  ) {
+    return normalizeRootPathString(userRootPathOverride);
+  }
+  return resolveConfiguredRootPath(configRootPath);
+}
+
+async function migrateLegacyRootPathFromLocalStorage(ipcRenderer, userSettings) {
+  if (userSettings?.rootPath && String(userSettings.rootPath).trim() !== "") {
+    return userSettings;
+  }
+  let legacy = null;
+  try {
+    legacy = localStorage.getItem(LEGACY_ROOT_PATH_STORAGE_KEY);
+  } catch (_) {
+    /* ignore */
+  }
+  if (legacy && String(legacy).trim() !== "") {
+    await ipcRenderer.invoke("app:set-user-settings", { rootPath: legacy });
+    try {
+      localStorage.removeItem(LEGACY_ROOT_PATH_STORAGE_KEY);
+    } catch (_) {
+      /* ignore */
+    }
+    return ipcRenderer.invoke("app:get-user-settings");
+  }
+  return userSettings;
+}
+
+function formatErrorReason(err) {
+  if (err == null) {
+    return "Unknown error";
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  if (err instanceof Error) {
+    return err.message || String(err);
+  }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+function showToast(message, kind = "error") {
+  const host = document.getElementById("toastHost");
+  if (!host) {
+    return;
+  }
+  const text = String(message ?? "").trim() || "Something went wrong.";
+  const el = document.createElement("div");
+  el.className = `app-toast app-toast--${kind}`;
+  el.setAttribute("role", kind === "error" ? "alert" : "status");
+
+  const iconWrap = document.createElement("span");
+  iconWrap.className = "app-toast__icon";
+  iconWrap.setAttribute("aria-hidden", "true");
+  const icon = document.createElement("i");
+  icon.className =
+    kind === "success"
+      ? "fa fa-check-circle"
+      : kind === "info"
+        ? "fa fa-info-circle"
+        : "fa fa-exclamation-circle";
+  iconWrap.appendChild(icon);
+
+  const body = document.createElement("span");
+  body.className = "app-toast__body";
+  body.textContent = text;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "app-toast__close";
+  closeBtn.setAttribute("aria-label", "Dismiss");
+  closeBtn.textContent = "\u00d7";
+
+  el.appendChild(iconWrap);
+  el.appendChild(body);
+  el.appendChild(closeBtn);
+
+  const close = () => {
+    el.classList.add("app-toast--out");
+    setTimeout(() => el.remove(), 280);
+  };
+  closeBtn.addEventListener("click", close);
+  host.appendChild(el);
+  const duration = kind === "error" ? 9000 : 5500;
+  setTimeout(close, duration);
+}
+
+function toastError(err, context) {
+  const reason = formatErrorReason(err);
+  const msg = context ? `${context}: ${reason}` : reason;
+  console.error(context || "Error", err);
+  showToast(msg, "error");
+}
+
+(function initGlobalErrorToasts() {
+  window.addEventListener("error", (event) => {
+    if (event.target && event.target !== window) {
+      return;
+    }
+    const detail =
+      event.error instanceof Error
+        ? event.error
+        : event.message || event.error || "Uncaught error";
+    toastError(detail, "Uncaught error");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    toastError(event.reason, "Unhandled promise rejection");
+  });
+})();
+
+const THEME_STORAGE_KEY = "electron-vs-launcher-theme";
+
+function getStoredThemePreference() {
+  try {
+    const v = localStorage.getItem(THEME_STORAGE_KEY);
+    if (v === "light" || v === "dark" || v === "system") {
+      return v;
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return "system";
+}
+
+function setStoredThemePreference(pref) {
+  if (pref !== "light" && pref !== "dark" && pref !== "system") {
+    return;
+  }
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, pref);
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function resolveAppliedTheme() {
+  const pref = getStoredThemePreference();
+  if (pref === "light") {
+    return "light";
+  }
+  if (pref === "dark") {
+    return "dark";
+  }
+  if (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  ) {
+    return "dark";
+  }
+  return "light";
+}
+
+function applyDocumentTheme() {
+  document.documentElement.setAttribute("data-theme", resolveAppliedTheme());
+}
+
+function syncThemePreferenceSelect() {
+  const sel = document.getElementById("themePreferenceSelect");
+  if (sel) {
+    sel.value = getStoredThemePreference();
+  }
+}
+
+(function initThemePreferenceListeners() {
+  applyDocumentTheme();
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const onChange = () => {
+    if (getStoredThemePreference() === "system") {
+      applyDocumentTheme();
+    }
+  };
+  if (typeof mq.addEventListener === "function") {
+    mq.addEventListener("change", onChange);
+  } else if (typeof mq.addListener === "function") {
+    mq.addListener(onChange);
+  }
+})();
+
 document
   .getElementById("launchBtnForIDE")
   .addEventListener("click", launchSelectedSolutionsSafely);
@@ -17,57 +239,15 @@ document
   .addEventListener("click", selectAllCheckboxes);
 document.getElementById('get-latest-selected').addEventListener('click', getLatestFromSelected);
 
-const THEME_STORAGE_KEY = "electron-vs-launcher-theme";
-
-(function initThemeToggle() {
-  const btn = document.getElementById("themeToggleBtn");
-  if (!btn) return;
-
-  function applyTheme(theme) {
-    const t = theme === "dark" ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", t);
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, t);
-    } catch (_) {}
-
-    const icon = btn.querySelector("i");
-    if (icon) {
-      icon.className =
-        t === "dark" ? "fa fa-sun-o" : "fa fa-moon-o";
-    }
-    btn.setAttribute(
-      "aria-label",
-      t === "dark" ? "Use light mode" : "Use dark mode"
-    );
-    btn.title = t === "dark" ? "Light mode" : "Dark mode";
-  }
-
-  let saved;
-  try {
-    saved = localStorage.getItem(THEME_STORAGE_KEY);
-  } catch (_) {}
-
-  const prefersDark =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  if (saved === "dark" || saved === "light") {
-    applyTheme(saved);
-  } else {
-    applyTheme(prefersDark ? "dark" : "light");
-  }
-
-  btn.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme") || "light";
-    applyTheme(cur === "dark" ? "light" : "dark");
-  });
-})();
-
 const riderPath = "/Applications/Rider.app/Contents/MacOS/rider";
 
 // Check if Rider is already running
 function isRiderRunning(callback) {
   const ps = spawn("pgrep", ["-f", "Rider"]);
+  ps.on("error", (err) => {
+    toastError(err, "Could not check if Rider is running");
+    callback(false);
+  });
   ps.on("close", (code) => {
     callback(code === 0); // 0 = found process
   });
@@ -79,13 +259,16 @@ function preWarmRider() {
     detached: true,
     stdio: "ignore"
   });
+  child.on("error", (err) => {
+    toastError(err, "Could not start Rider");
+  });
   child.unref();
 }
 
 // Launch a single solution in Rider
 function launchSolution(solutionPath) {
   if (!fs.existsSync(solutionPath)) {
-    console.error(`Solution path does not exist: ${solutionPath}`);
+    showToast(`Solution path does not exist:\n${solutionPath}`, "error");
     return;
   }
 
@@ -97,6 +280,9 @@ function launchSolution(solutionPath) {
   };
 
   const child = spawn(riderPath, args, options);
+  child.on("error", (err) => {
+    toastError(err, "Could not open solution in Rider");
+  });
   child.unref();
 
   console.log(`Launched Rider for: ${solutionPath}`);
@@ -144,7 +330,7 @@ function getLatestFromSelected() {
   document
   .querySelectorAll('input[type="checkbox"]:checked')
   .forEach((checkbox) => {
-    getLatest(checkbox.value, rootPathGlobal);
+    getLatest(checkbox.value, effectiveRootPath);
   });
 }
 
@@ -179,98 +365,66 @@ function getLatest(solutionPath, rootPath) {
     : path.join(rootPath, solutionPath);
 
   if (!fs.existsSync(normalized)) {
-    showNotification(
-      "Error getting latest:",
-      `Path does not exist: ${normalized}`,
-      "error"
-    );
+    showToast(`Path does not exist:\n${normalized}`, "error");
     return;
   }
 
-  const st = fs.statSync(normalized);
-  const pathWithoutFileName = st.isDirectory()
-    ? normalized
-    : path.dirname(normalized);
-  const name = path.basename(normalized);
+  let pathWithoutFileName;
+  let name;
+  try {
+    const st = fs.statSync(normalized);
+    pathWithoutFileName = st.isDirectory()
+      ? normalized
+      : path.dirname(normalized);
+    name = path.basename(normalized);
+  } catch (err) {
+    toastError(err, "Cannot read path");
+    return;
+  }
 
   exec(
     `cd "${pathWithoutFileName}" && git checkout master_dev && git pull`,
     (error, stdout, stderr) => {
       if (error) {
-        showNotification(
-          "Error getting latest:",
-          error.message + `${name}`,
+        const extra = stderr ? `\n${stderr}` : "";
+        showToast(
+          `Get latest failed (${name}): ${formatErrorReason(error)}${extra}`,
           "error"
         );
         return;
       }
-      showNotification("Get Latest Successful", `${name} ` + stdout, "success");
+      const okMsg = [stdout].filter(Boolean).join("").trim();
+      showToast(
+        okMsg ? `Get latest: ${name}\n${okMsg}` : `Get latest succeeded: ${name}`,
+        "success"
+      );
     }
   );
 }
 
 function showNotification(title, message, state) {
-  const NOTIFICATION_TITLE = title;
-  const NOTIFICATION_BODY = message;
-  const CLICK_MESSAGE = "click to show";
-  var ICON = "";
-
-  if (state == "success") {
-    ICON = "check.png";
-  } else {
-    ICON = "close.png";
-  }
-  new window.Notification(NOTIFICATION_TITLE, {
-    body: NOTIFICATION_BODY,
-    icon: ICON,
-    renotify: false,
-  }).onclick = () => {
-    document.getElementById("output").innerText = CLICK_MESSAGE;
-  };
+  const kind =
+    state === "success" ? "success" : state === "error" ? "error" : "info";
+  const combined = [title, message].filter(Boolean).join(" ").trim();
+  showToast(combined || title || "Notice", kind);
 }
 
 function updateDb(migratorRelativePath) {
-  const dotnetPath = "/usr/local/share/dotnet/dotnet";
-  const migratorProjectPath = path.resolve(__dirname, migratorRelativePath);
+  try {
+    const dotnetPath = "/usr/local/share/dotnet/dotnet";
+    const migratorProjectPath = path.resolve(__dirname, migratorRelativePath);
 
-  if (!fs.existsSync(dotnetPath) || fs.lstatSync(dotnetPath).isDirectory()) {
-    console.error("❌ Invalid dotnet path: not a file or does not exist");
-    return;
-  }
-  if (!fs.existsSync(migratorProjectPath) || fs.lstatSync(migratorProjectPath).isDirectory()) {
-    console.error("❌ Invalid migrator project path. Expected a .csproj file.");
-    return;
-  }
-
-  // AppleScript to open Terminal and run the command
-  const command = `"${dotnetPath}" run --project "${migratorProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
-  const osaScript = [
-    'tell application "Terminal"',
-    `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
-    'activate',
-    'end tell'
-  ].join('\n');
-
-  spawn('osascript', ['-e', osaScript], {
-    detached: true,
-    stdio: "ignore"
-  }).unref();
-}
-
-
-
-
-function launchOnCLI(startupProject, category, npmScript) {
-  const startupProjectPath = path.resolve(startupProject);
-  const cat = category || "dotnet";
-
-  if (cat === "node") {
-    if (!fs.existsSync(startupProjectPath) || !fs.statSync(startupProjectPath).isDirectory()) {
-      console.error("❌ Node projects expect startupProject to be an existing directory.");
+    if (!fs.existsSync(dotnetPath) || fs.lstatSync(dotnetPath).isDirectory()) {
+      showToast("Invalid .NET SDK path: /usr/local/share/dotnet/dotnet", "error");
       return;
     }
-    const script = npmScript || "start";
-    const command = `cd "${startupProjectPath}" && npm run ${script}; echo; echo 'Press any key to exit...'; read -n 1`;
+    if (!fs.existsSync(migratorProjectPath) || fs.lstatSync(migratorProjectPath).isDirectory()) {
+      showToast("Invalid migrator project: expected a .csproj file.", "error");
+      return;
+    }
+
+    // AppleScript to open Terminal and run the command
+    const command = `"${dotnetPath}" run --project "${migratorProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
     const osaScript = [
       'tell application "Terminal"',
       `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
@@ -282,33 +436,67 @@ function launchOnCLI(startupProject, category, npmScript) {
       detached: true,
       stdio: "ignore"
     }).unref();
-    return;
+  } catch (e) {
+    toastError(e, "Update DB");
   }
+}
 
-  const dotnetPath = "/usr/local/share/dotnet/dotnet";
 
-  if (!fs.existsSync(dotnetPath) || fs.lstatSync(dotnetPath).isDirectory()) {
-    console.error("❌ Invalid dotnet path: not a file or does not exist");
-    return;
+
+
+function launchOnCLI(startupProject, category, npmScript) {
+  try {
+    const startupProjectPath = path.resolve(startupProject);
+    const cat = category || "dotnet";
+
+    if (cat === "node") {
+      if (!fs.existsSync(startupProjectPath) || !fs.statSync(startupProjectPath).isDirectory()) {
+        showToast("Node projects require startupProject to be an existing directory.", "error");
+        return;
+      }
+      const script = npmScript || "start";
+      const command = `cd "${startupProjectPath}" && npm run ${script}; echo; echo 'Press any key to exit...'; read -n 1`;
+      const osaScript = [
+        'tell application "Terminal"',
+        `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
+        'activate',
+        'end tell'
+      ].join('\n');
+
+      spawn('osascript', ['-e', osaScript], {
+        detached: true,
+        stdio: "ignore"
+      }).unref();
+      return;
+    }
+
+    const dotnetPath = "/usr/local/share/dotnet/dotnet";
+
+    if (!fs.existsSync(dotnetPath) || fs.lstatSync(dotnetPath).isDirectory()) {
+      showToast("Invalid .NET SDK path: /usr/local/share/dotnet/dotnet", "error");
+      return;
+    }
+    if (!fs.existsSync(startupProjectPath) || fs.lstatSync(startupProjectPath).isDirectory()) {
+      showToast("Expected a .csproj file for Run in console.", "error");
+      return;
+    }
+
+    // AppleScript to open Terminal and run the command
+    const command = `"${dotnetPath}" run --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
+    const osaScript = [
+      'tell application "Terminal"',
+      `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
+      'activate',
+      'end tell'
+    ].join('\n');
+
+    spawn('osascript', ['-e', osaScript], {
+      detached: true,
+      stdio: "ignore"
+    }).unref();
+  } catch (e) {
+    toastError(e, "Run in CLI");
   }
-  if (!fs.existsSync(startupProjectPath) || fs.lstatSync(startupProjectPath).isDirectory()) {
-    console.error("❌ Invalid migrator project path. Expected a .csproj file.");
-    return;
-  }
-
-  // AppleScript to open Terminal and run the command
-  const command = `"${dotnetPath}" run --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
-  const osaScript = [
-    'tell application "Terminal"',
-    `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
-    'activate',
-    'end tell'
-  ].join('\n');
-
-  spawn('osascript', ['-e', osaScript], {
-    detached: true,
-    stdio: "ignore"
-  }).unref();
 }
 
 
@@ -528,30 +716,39 @@ function dockerizeApp(solution, rootPath) {
 
   const buildOptions = { shell: true, stdio: 'inherit' };
   const buildProcess = spawn('/bin/bash', ['-c', dockerBuildCommand], buildOptions);
+  buildProcess.on('error', (err) => {
+    toastError(err, "Docker build");
+  });
 
   buildProcess.on('close', (code) => {
     if (code !== 0) {
-      console.error(`Error building Docker image for ${solution.name}. Exit code: ${code}`);
+      showToast(`Docker build failed for ${solution.name} (exit ${code}).`, "error");
       return;
     }
 
     console.log(`Docker image built for ${solution.name}.`);
 
     const runProcess = spawn('/bin/bash', ['-c', dockerRunCommand], buildOptions);
+    runProcess.on('error', (err) => {
+      toastError(err, "Docker run");
+    });
 
     runProcess.on('close', (code) => {
       if (code !== 0) {
-        console.error(`Error running Docker container for ${solution.name}. Exit code: ${code}`);
+        showToast(`Docker run failed for ${solution.name} (exit ${code}).`, "error");
         return;
       }
 
       console.log(`Docker container running for ${solution.name}.`);
 
       const pruneProcess = spawn('/bin/bash', ['-c', dockerPruneCommand], buildOptions);
+      pruneProcess.on('error', (err) => {
+        toastError(err, "Docker prune");
+      });
 
       pruneProcess.on('close', (code) => {
         if (code !== 0) {
-          console.error(`Error removing dangling images. Exit code: ${code}`);
+          showToast(`Docker image prune failed (exit ${code}).`, "error");
           return;
         }
 
@@ -561,18 +758,126 @@ function dockerizeApp(solution, rootPath) {
   });
 }
 
+function syncRootPathInput(resolvedPath) {
+  const input = document.getElementById("rootPathInput");
+  if (input) {
+    input.value = resolvedPath;
+  }
+}
+
 function loadSolutions() {
   const configPath = path.join(__dirname, "config.json");
-  fs.readFile(configPath, "utf-8", (err, data) => {
-    if (err) {
-      console.error("Error reading config file:", err);
+  const { ipcRenderer } = require("electron");
+
+  return (async () => {
+    try {
+      const [userSettings, data] = await Promise.all([
+        ipcRenderer.invoke("app:get-user-settings"),
+        fs.promises.readFile(configPath, "utf-8"),
+      ]);
+      const migrated = await migrateLegacyRootPathFromLocalStorage(
+        ipcRenderer,
+        userSettings
+      );
+      let config;
+      try {
+        config = JSON.parse(data);
+      } catch (parseErr) {
+        toastError(parseErr, "Invalid config.json");
+        return false;
+      }
+      const rootPath = getEffectiveRootPath(
+        config.rootPath,
+        migrated?.rootPath
+      );
+      effectiveRootPath = rootPath;
+      syncRootPathInput(rootPath);
+      loadSolutionsFromConfig({ ...config, rootPath });
+      return true;
+    } catch (err) {
+      toastError(err, "Error loading config");
+      return false;
+    }
+  })();
+}
+
+(function initRootPathControls() {
+  const { ipcRenderer } = require("electron");
+  const modalEl = document.getElementById("userSettingsModal");
+  const input = document.getElementById("rootPathInput");
+  const browseBtn = document.getElementById("browseRootPathBtn");
+  const resetBtn = document.getElementById("resetRootPathBtn");
+  const applyBtn = document.getElementById("applyRootPathBtn");
+  if (!modalEl || !input || !browseBtn || !resetBtn || !applyBtn) {
+    return;
+  }
+
+  function hideSettingsModal() {
+    if (typeof bootstrap === "undefined") {
       return;
     }
-    const config = JSON.parse(data);
-    this.rootPathGlobal = config.rootPath;
-    loadSolutionsFromConfig(config);
+    const inst = bootstrap.Modal.getInstance(modalEl);
+    if (inst) {
+      inst.hide();
+    }
+  }
+
+  modalEl.addEventListener("shown.bs.modal", () => {
+    syncRootPathInput(effectiveRootPath);
+    syncThemePreferenceSelect();
   });
-}
+
+  const themeSelect = document.getElementById("themePreferenceSelect");
+  if (themeSelect) {
+    themeSelect.addEventListener("change", () => {
+      setStoredThemePreference(themeSelect.value);
+      applyDocumentTheme();
+    });
+  }
+
+  applyBtn.addEventListener("click", async () => {
+    const normalized = normalizeRootPathString(input.value);
+    try {
+      await ipcRenderer.invoke("app:set-user-settings", { rootPath: normalized });
+      const ok = await loadSolutions();
+      if (ok) {
+        hideSettingsModal();
+      }
+    } catch (e) {
+      toastError(e, "Could not save repos root");
+    }
+  });
+
+  resetBtn.addEventListener("click", async () => {
+    try {
+      await ipcRenderer.invoke("app:set-user-settings", { rootPath: null });
+      await loadSolutions();
+    } catch (e) {
+      toastError(e, "Could not reset repos root");
+    }
+  });
+
+  browseBtn.addEventListener("click", async () => {
+    try {
+      const result = await ipcRenderer.invoke("app:open-directory-dialog");
+      if (result?.canceled || !result?.path) {
+        return;
+      }
+      const p = result.path;
+      input.value = p.endsWith(path.sep) ? p : p + path.sep;
+      applyBtn.click();
+    } catch (e) {
+      toastError(e, "Folder picker failed");
+    }
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyBtn.click();
+    }
+  });
+})();
 
 loadSolutions();
 
@@ -607,6 +912,8 @@ loadSolutions();
     }
 
     document.title = `${info.name} · ${info.shortDisplay}`;
+  }).catch((e) => {
+    toastError(e, "Could not read app version");
   });
 })();
 
@@ -677,6 +984,7 @@ loadSolutions();
         }
         setStatusText(payload.message || "Update check failed");
         setInstallVisible(false);
+        showToast(payload.message || "Update check failed", "error");
         break;
       default:
         break;
@@ -710,6 +1018,8 @@ loadSolutions();
   });
 
   installBtn.addEventListener("click", () => {
-    ipcRenderer.invoke("updater:install");
+    ipcRenderer.invoke("updater:install").catch((e) => {
+      toastError(e, "Could not install update");
+    });
   });
 })();
