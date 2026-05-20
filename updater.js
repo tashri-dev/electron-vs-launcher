@@ -8,6 +8,8 @@ const UPDATE_CHANNELS = {
 
 let mainWindow = null;
 let autoUpdater = null;
+/** Avoid follow-up updater events overwriting UI after download is finished. */
+let updateReadyToInstall = false;
 
 function sendToRenderer(channel, payload) {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -21,6 +23,19 @@ function setStatus(status, details = {}) {
   sendToRenderer(UPDATE_CHANNELS.STATUS, { status, ...details });
 }
 
+function notifyStatusUnlessInstallPending(status, details = {}) {
+  if (
+    updateReadyToInstall &&
+    (status === "checking" ||
+      status === "not-available" ||
+      status === "available" ||
+      status === "downloading")
+  ) {
+    return;
+  }
+  setStatus(status, details);
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("updater:check", async () => {
     if (!app.isPackaged) {
@@ -31,7 +46,9 @@ function registerIpcHandlers() {
       const result = await autoUpdater.checkForUpdates();
       return { status: "checking", updateInfo: result?.updateInfo ?? null };
     } catch (error) {
-      setStatus("error", { message: error.message });
+      if (!updateReadyToInstall) {
+        setStatus("error", { message: error.message });
+      }
       return { status: "error", message: error.message };
     }
   });
@@ -39,6 +56,42 @@ function registerIpcHandlers() {
   ipcMain.handle("updater:install", () => {
     if (!app.isPackaged) {
       return { ok: false, reason: "dev" };
+    }
+
+    if (process.platform === "darwin") {
+      const fsSync = require("fs");
+      const helper = autoUpdater.downloadedUpdateHelper;
+      const zipPath = helper && helper.file ? String(helper.file).trim() : "";
+
+      if (zipPath && fsSync.existsSync(zipPath)) {
+        try {
+          const { launchReplaceFromZip } = require("./mac-install-update");
+          launchReplaceFromZip(zipPath);
+          setImmediate(() => {
+            for (const w of BrowserWindow.getAllWindows()) {
+              try {
+                if (!w.isDestroyed()) {
+                  w.destroy();
+                }
+              } catch {
+                /* ignore */
+              }
+            }
+            app.quit();
+          });
+          return { ok: true };
+        } catch (error) {
+          setStatus("error", { message: error.message });
+          return { ok: false, message: error.message };
+        }
+      }
+
+      /*
+       * Fallback: Squirrel / native install (typically needs code signing).
+       */
+      autoUpdater.autoInstallOnAppQuit = false;
+      autoUpdater.quitAndInstall(false, true);
+      return { ok: true };
     }
 
     autoUpdater.quitAndInstall(false, true);
@@ -58,21 +111,24 @@ function bindAutoUpdaterEvents() {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("checking-for-update", () => {
-    setStatus("checking");
+    notifyStatusUnlessInstallPending("checking");
   });
 
   autoUpdater.on("update-available", (info) => {
-    setStatus("available", {
+    notifyStatusUnlessInstallPending("available", {
       version: info.version,
       releaseDate: info.releaseDate,
     });
   });
 
   autoUpdater.on("update-not-available", (info) => {
-    setStatus("not-available", { version: info.version });
+    notifyStatusUnlessInstallPending("not-available", { version: info.version });
   });
 
   autoUpdater.on("download-progress", (progress) => {
+    if (updateReadyToInstall) {
+      return;
+    }
     sendToRenderer(UPDATE_CHANNELS.PROGRESS, {
       percent: progress.percent,
       transferred: progress.transferred,
@@ -83,10 +139,14 @@ function bindAutoUpdaterEvents() {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
+    updateReadyToInstall = true;
     setStatus("downloaded", { version: info.version });
   });
 
   autoUpdater.on("error", (error) => {
+    if (updateReadyToInstall) {
+      return;
+    }
     setStatus("error", { message: error.message });
   });
 }
@@ -105,7 +165,9 @@ function initUpdater(getMainWindow) {
 
   setTimeout(() => {
     autoUpdater.checkForUpdatesAndNotify().catch((error) => {
-      setStatus("error", { message: error.message });
+      if (!updateReadyToInstall) {
+        setStatus("error", { message: error.message });
+      }
     });
   }, 3000);
 }

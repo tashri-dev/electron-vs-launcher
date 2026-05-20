@@ -629,7 +629,21 @@ loadSolutions();
     statusLabel.textContent = text || "";
   }
 
+  let installPending = false;
+  let downloadedVersion = null;
+
   ipcRenderer.on("updater:status", (_event, payload) => {
+    if (
+      installPending &&
+      downloadedVersion &&
+      (payload.status === "checking" ||
+        payload.status === "not-available" ||
+        payload.status === "available" ||
+        payload.status === "downloading")
+    ) {
+      return;
+    }
+
     switch (payload.status) {
       case "dev":
         setStatusText("Updates run in packaged builds only");
@@ -648,7 +662,9 @@ loadSolutions();
         setInstallVisible(false);
         break;
       case "downloaded":
-        setStatusText(`Update v${payload.version} ready`);
+        installPending = true;
+        downloadedVersion = payload.version;
+        setStatusText(`Update v${payload.version} ready — restart to install`);
         setInstallVisible(true);
         break;
       case "not-available":
@@ -656,6 +672,9 @@ loadSolutions();
         setInstallVisible(false);
         break;
       case "error":
+        if (installPending) {
+          return;
+        }
         setStatusText(payload.message || "Update check failed");
         setInstallVisible(false);
         break;
@@ -665,10 +684,18 @@ loadSolutions();
   });
 
   ipcRenderer.on("updater:progress", (_event, progress) => {
+    if (installPending) {
+      return;
+    }
     setStatusText(`Downloading update… ${Math.round(progress.percent || 0)}%`);
   });
 
   checkBtn.addEventListener("click", async () => {
+    if (installPending && downloadedVersion) {
+      setStatusText(`Update v${downloadedVersion} ready — restart to install`);
+      return;
+    }
+
     checkBtn.disabled = true;
     setStatusText("Checking for updates…");
     try {

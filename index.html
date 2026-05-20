@@ -24,21 +24,27 @@
         </p>
       </div>
       <div class="app-header__actions">
-        <div class="app-updater" id="appUpdater" aria-live="polite">
-          <span class="app-updater__version" id="appVersionLabel">v—</span>
-          <button type="button" class="btn btn-sm btn-amwal-outline app-updater__check" id="checkUpdatesBtn"
-            title="Check for app updates">
-            <i class="fa fa-refresh me-1" aria-hidden="true"></i> Check updates
+        <div class="app-header__actions-main">
+          <div class="app-updater" id="appUpdater" aria-live="polite">
+            <span class="app-updater__version" id="appVersionLabel">v—</span>
+            <div class="app-updater__buttons">
+              <button type="button" class="btn btn-sm btn-amwal-outline app-updater__check" id="checkUpdatesBtn"
+                title="Check for app updates">
+                <i class="fa fa-refresh me-1" aria-hidden="true"></i> Check updates
+              </button>
+              <button type="button" class="btn btn-sm btn-amwal-primary app-updater__install d-none" id="installUpdateBtn">
+                <i class="fa fa-arrow-circle-up me-1" aria-hidden="true"></i> Restart to update
+              </button>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-amwal-outline app-theme-toggle" id="themeToggleBtn"
+            aria-label="Use dark mode" title="Dark mode">
+            <i class="fa fa-moon-o" aria-hidden="true"></i>
           </button>
-          <button type="button" class="btn btn-sm btn-amwal-primary app-updater__install d-none" id="installUpdateBtn">
-            <i class="fa fa-arrow-circle-up me-1" aria-hidden="true"></i> Restart to update
-          </button>
+        </div>
+        <div class="app-updater__status-row">
           <span class="app-updater__status" id="updateStatusLabel"></span>
         </div>
-        <button type="button" class="btn btn-sm btn-amwal-outline app-theme-toggle" id="themeToggleBtn"
-          aria-label="Use dark mode" title="Dark mode">
-          <i class="fa fa-moon-o" aria-hidden="true"></i>
-        </button>
       </div>
     </div>
   </header>
