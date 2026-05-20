@@ -6,7 +6,7 @@
 #   feat!: ...   → major  (1.0.0 → 2.0.0)
 #
 # Tagging: https://github.com/marketplace/actions/github-tag
-# Release assets: electron-builder → GitHub Releases (for electron-updater)
+# Release:  https://github.com/marketplace/actions/gh-release
 
 name: Release
 
@@ -60,23 +60,31 @@ jobs:
         if: steps.tag_version.outputs.new_tag != ''
         run: npm run version:write-meta
 
-      - name: Build and publish to GitHub Releases
+      - name: Build macOS app
         if: steps.tag_version.outputs.new_tag != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --publish always
+        run: npx electron-builder --mac
 
-      - name: Update release notes
+      - name: Prepare release notes
         if: steps.tag_version.outputs.new_tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CHANGELOG: ${{ steps.tag_version.outputs.changelog }}
-        run: |
-          printf '%s\n' "$CHANGELOG" > /tmp/release-notes.md
-          gh release edit "${{ steps.tag_version.outputs.new_tag }}" \
-            --repo "${{ github.repository }}" \
-            --notes-file /tmp/release-notes.md
+        run: printf '%s\n' "${{ steps.tag_version.outputs.changelog }}" > release-notes.md
+
+      - name: Create GitHub Release and upload assets
+        if: steps.tag_version.outputs.new_tag != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body_path: release-notes.md
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: |
+            dist/*.dmg
+            dist/*-mac.zip
+            dist/latest-mac.yml
+            dist/*.blockmap
+          fail_on_unmatched_files: true
 
       - name: Commit version bump
         if: steps.tag_version.outputs.new_version != ''
