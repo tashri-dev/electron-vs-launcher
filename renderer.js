@@ -87,6 +87,66 @@ function formatErrorReason(err) {
   }
 }
 
+function formatGitExecError(error, stderr) {
+  const errText = String(stderr ?? "").trim();
+  if (errText) {
+    return errText;
+  }
+  const message = formatErrorReason(error);
+  return message.replace(/^Command failed: [^\n]+\n?/, "").trim() || message;
+}
+
+function resolveGetLatestTarget(solutionPath, rootPath) {
+  const normalized = path.isAbsolute(solutionPath)
+    ? solutionPath
+    : path.join(rootPath, solutionPath);
+
+  if (!fs.existsSync(normalized)) {
+    return { error: `Path does not exist:\n${normalized}` };
+  }
+
+  try {
+    const st = fs.statSync(normalized);
+    const repoDir = st.isDirectory() ? normalized : path.dirname(normalized);
+    return {
+      repoDir,
+      name: path.basename(normalized),
+    };
+  } catch (err) {
+    return { error: err, context: "Cannot read path" };
+  }
+}
+
+const getLatestInFlight = new Set();
+
+function updateToastToolbar() {
+  const host = document.getElementById("toastHost");
+  const toolbar = document.getElementById("toastToolbar");
+  if (!host || !toolbar) {
+    return;
+  }
+  toolbar.hidden = host.querySelectorAll(".app-toast").length === 0;
+}
+
+function dismissToast(el) {
+  if (!el || el.classList.contains("app-toast--out")) {
+    return;
+  }
+  el.classList.add("app-toast--out");
+  setTimeout(() => {
+    el.remove();
+    updateToastToolbar();
+  }, 280);
+}
+
+function clearAllToasts() {
+  const host = document.getElementById("toastHost");
+  if (!host) {
+    return;
+  }
+  host.querySelectorAll(".app-toast").forEach(dismissToast);
+}
+
 function showToast(message, kind = "error") {
   const host = document.getElementById("toastHost");
   if (!host) {
@@ -117,20 +177,16 @@ function showToast(message, kind = "error") {
   closeBtn.type = "button";
   closeBtn.className = "app-toast__close";
   closeBtn.setAttribute("aria-label", "Dismiss");
-  closeBtn.textContent = "\u00d7";
+  closeBtn.innerHTML = '<i class="fa fa-times" aria-hidden="true"></i>';
 
   el.appendChild(iconWrap);
   el.appendChild(body);
   el.appendChild(closeBtn);
 
-  const close = () => {
-    el.classList.add("app-toast--out");
-    setTimeout(() => el.remove(), 280);
-  };
-  closeBtn.addEventListener("click", close);
+  closeBtn.addEventListener("click", () => dismissToast(el));
   host.appendChild(el);
-  const duration = kind === "error" ? 9000 : 5500;
-  setTimeout(close, duration);
+  host.scrollTop = host.scrollHeight;
+  updateToastToolbar();
 }
 
 function toastError(err, context) {
@@ -154,6 +210,8 @@ function toastError(err, context) {
   window.addEventListener("unhandledrejection", (event) => {
     toastError(event.reason, "Unhandled promise rejection");
   });
+
+  document.getElementById("clearToastsBtn")?.addEventListener("click", clearAllToasts);
 })();
 
 const THEME_STORAGE_KEY = "electron-vs-launcher-theme";
@@ -333,11 +391,26 @@ function launchSelectedSolutionsSafely() {
 
 
 function getLatestFromSelected() {
+  const seenRepoDirs = new Set();
+
   document
-  .querySelectorAll('input[type="checkbox"]:checked')
-  .forEach((checkbox) => {
-    getLatest(checkbox.value, effectiveRootPath);
-  });
+    .querySelectorAll('input[type="checkbox"]:checked')
+    .forEach((checkbox) => {
+      const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
+      if (target.error) {
+        if (target.context) {
+          toastError(target.error, target.context);
+        } else {
+          showToast(target.error, "error");
+        }
+        return;
+      }
+      if (seenRepoDirs.has(target.repoDir)) {
+        return;
+      }
+      seenRepoDirs.add(target.repoDir);
+      runGetLatest(target.repoDir, target.name);
+    });
 }
 
 
@@ -366,35 +439,34 @@ function selectAllCheckboxes() {
 
 
 function getLatest(solutionPath, rootPath) {
-  const normalized = path.isAbsolute(solutionPath)
-    ? solutionPath
-    : path.join(rootPath, solutionPath);
+  const target = resolveGetLatestTarget(solutionPath, rootPath);
+  if (target.error) {
+    if (target.context) {
+      toastError(target.error, target.context);
+    } else {
+      showToast(target.error, "error");
+    }
+    return;
+  }
+  runGetLatest(target.repoDir, target.name);
+}
 
-  if (!fs.existsSync(normalized)) {
-    showToast(`Path does not exist:\n${normalized}`, "error");
+function runGetLatest(repoDir, name) {
+  if (getLatestInFlight.has(repoDir)) {
+    showToast(`Get latest already running for ${name}`, "info");
     return;
   }
 
-  let pathWithoutFileName;
-  let name;
-  try {
-    const st = fs.statSync(normalized);
-    pathWithoutFileName = st.isDirectory()
-      ? normalized
-      : path.dirname(normalized);
-    name = path.basename(normalized);
-  } catch (err) {
-    toastError(err, "Cannot read path");
-    return;
-  }
+  getLatestInFlight.add(repoDir);
 
   exec(
-    `cd "${pathWithoutFileName}" && git checkout master_dev && git pull`,
+    `cd "${repoDir}" && git checkout master_dev && git pull`,
     (error, stdout, stderr) => {
+      getLatestInFlight.delete(repoDir);
+
       if (error) {
-        const extra = stderr ? `\n${stderr}` : "";
         showToast(
-          `Get latest failed (${name}): ${formatErrorReason(error)}${extra}`,
+          `Get latest failed (${name}):\n${formatGitExecError(error, stderr)}`,
           "error"
         );
         return;

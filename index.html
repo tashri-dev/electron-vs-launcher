@@ -97,7 +97,14 @@
     <span id="appVersionFooter"></span>
   </footer>
 
-  <div id="toastHost" class="app-toast-host" aria-live="polite"></div>
+  <div class="app-toast-panel" id="toastPanel">
+    <div class="app-toast-toolbar" id="toastToolbar" hidden>
+      <button type="button" class="app-toast-clear" id="clearToastsBtn" aria-label="Clear all notifications">
+        <i class="fa fa-times-circle me-1" aria-hidden="true"></i> Clear all
+      </button>
+    </div>
+    <div id="toastHost" class="app-toast-host" aria-live="polite"></div>
+  </div>
 
   <div class="modal fade app-settings-modal" id="userSettingsModal" tabindex="-1" aria-labelledby="userSettingsModalLabel"
     aria-hidden="true">
