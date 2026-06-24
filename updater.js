@@ -112,7 +112,30 @@ function registerIpcHandlers() {
     if (patch && Object.prototype.hasOwnProperty.call(patch, "rootPath")) {
       userSettings.setRootPathOverride(patch.rootPath);
     }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "configPath")) {
+      userSettings.setConfigPathOverride(patch.configPath);
+    }
     return userSettings.getUserSettingsForRenderer();
+  });
+
+  ipcMain.handle("app:open-file-dialog", async () => {
+    const parentWindow =
+      typeof mainWindow === "function" ? mainWindow() : mainWindow;
+    const parent =
+      parentWindow && !parentWindow.isDestroyed()
+        ? parentWindow
+        : BrowserWindow.getFocusedWindow() || undefined;
+
+    const result = await dialog.showOpenDialog(parent, {
+      properties: ["openFile"],
+      filters: [{ name: "JSON files", extensions: ["json"] }],
+    });
+
+    if (result.canceled || !result.filePaths?.length) {
+      return { canceled: true, path: null };
+    }
+
+    return { canceled: false, path: result.filePaths[0] };
   });
 
   ipcMain.handle("app:open-directory-dialog", async () => {

@@ -7,6 +7,7 @@ const { exec, spawn } = require("child_process");
 const LEGACY_ROOT_PATH_STORAGE_KEY = "electron-vs-launcher-root-path";
 
 let effectiveRootPath = "";
+let activeConfigPath = null;
 
 function getDefaultRootPath() {
   return path.join(os.homedir(), "git-repos", "amwal-pay") + path.sep;
@@ -297,7 +298,7 @@ document
   .addEventListener("click", selectAllCheckboxes);
 document.getElementById('get-latest-selected').addEventListener('click', getLatestFromSelected);
 
-const riderPath = "/Applications/Rider.app/Contents/MacOS/rider";
+const riderPath = `${os.homedir()}/Applications/Rider.app/Contents/MacOS/rider`;
 
 // Check if Rider is already running
 function isRiderRunning(callback) {
@@ -390,8 +391,14 @@ function launchSelectedSolutionsSafely() {
 }
 
 
+function getBranchSelection() {
+  const sel = document.getElementById("branchSelect");
+  return sel ? sel.value : "master_dev";
+}
+
 function getLatestFromSelected() {
   const seenRepoDirs = new Set();
+  const branch = getBranchSelection();
 
   document
     .querySelectorAll('input[type="checkbox"]:checked')
@@ -409,14 +416,12 @@ function getLatestFromSelected() {
         return;
       }
       seenRepoDirs.add(target.repoDir);
-      runGetLatest(target.repoDir, target.name);
+      runGetLatest(target.repoDir, target.name, branch);
     });
 }
 
 
 function warmUpRider() {
-  const riderPath = "/Applications/Rider.app/Contents/MacOS/rider";
-
   const child = spawn(riderPath, {
     detached: true,
     stdio: "ignore"
@@ -448,19 +453,20 @@ function getLatest(solutionPath, rootPath) {
     }
     return;
   }
-  runGetLatest(target.repoDir, target.name);
+  runGetLatest(target.repoDir, target.name, getBranchSelection());
 }
 
-function runGetLatest(repoDir, name) {
+function runGetLatest(repoDir, name, branch) {
   if (getLatestInFlight.has(repoDir)) {
     showToast(`Get latest already running for ${name}`, "info");
     return;
   }
 
   getLatestInFlight.add(repoDir);
+  const targetBranch = branch || "master_dev";
 
   exec(
-    `cd "${repoDir}" && git checkout master_dev && git pull`,
+    `cd "${repoDir}" && git checkout ${targetBranch} && git pull`,
     (error, stdout, stderr) => {
       getLatestInFlight.delete(repoDir);
 
@@ -861,20 +867,35 @@ function syncRootPathInput(resolvedPath) {
   }
 }
 
+function syncConfigPathInput(configPath) {
+  const input = document.getElementById("configPathInput");
+  if (input) {
+    input.value = configPath ?? "";
+  }
+}
+
 function loadSolutions() {
-  const configPath = path.join(__dirname, "config.json");
+  const defaultConfigPath = path.join(__dirname, "config.json");
   const { ipcRenderer } = require("electron");
 
   return (async () => {
     try {
-      const [userSettings, data] = await Promise.all([
-        ipcRenderer.invoke("app:get-user-settings"),
-        fs.promises.readFile(configPath, "utf-8"),
-      ]);
+      const userSettings = await ipcRenderer.invoke("app:get-user-settings");
       const migrated = await migrateLegacyRootPathFromLocalStorage(
         ipcRenderer,
         userSettings
       );
+
+      const configPath = migrated?.configPath ? migrated.configPath : defaultConfigPath;
+
+      let data;
+      try {
+        data = await fs.promises.readFile(configPath, "utf-8");
+      } catch (err) {
+        toastError(err, `Error reading config: ${configPath}`);
+        return false;
+      }
+
       let config;
       try {
         config = JSON.parse(data);
@@ -882,12 +903,15 @@ function loadSolutions() {
         toastError(parseErr, "Invalid config.json");
         return false;
       }
+
       const rootPath = getEffectiveRootPath(
         config.rootPath,
         migrated?.rootPath
       );
+      activeConfigPath = migrated?.configPath ?? null;
       effectiveRootPath = rootPath;
       syncRootPathInput(rootPath);
+      syncConfigPathInput(activeConfigPath);
       loadSolutionsFromConfig({ ...config, rootPath });
       return true;
     } catch (err) {
@@ -920,6 +944,7 @@ function loadSolutions() {
 
   modalEl.addEventListener("shown.bs.modal", () => {
     syncRootPathInput(effectiveRootPath);
+    syncConfigPathInput(activeConfigPath);
     syncThemePreferenceSelect();
   });
 
@@ -973,6 +998,33 @@ function loadSolutions() {
       applyBtn.click();
     }
   });
+
+  const browseConfigBtn = document.getElementById("browseConfigPathBtn");
+  const resetConfigBtn = document.getElementById("resetConfigPathBtn");
+
+  if (browseConfigBtn && resetConfigBtn) {
+    browseConfigBtn.addEventListener("click", async () => {
+      try {
+        const result = await ipcRenderer.invoke("app:open-file-dialog");
+        if (result?.canceled || !result?.path) {
+          return;
+        }
+        await ipcRenderer.invoke("app:set-user-settings", { configPath: result.path });
+        await loadSolutions();
+      } catch (e) {
+        toastError(e, "Config file picker failed");
+      }
+    });
+
+    resetConfigBtn.addEventListener("click", async () => {
+      try {
+        await ipcRenderer.invoke("app:set-user-settings", { configPath: null });
+        await loadSolutions();
+      } catch (e) {
+        toastError(e, "Could not reset config path");
+      }
+    });
+  }
 })();
 
 loadSolutions();

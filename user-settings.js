@@ -29,7 +29,11 @@ function getUserSettingsForRenderer() {
     typeof data.rootPath === "string" && data.rootPath.trim() !== ""
       ? data.rootPath.trim()
       : null;
-  return { rootPath };
+  const configPath =
+    typeof data.configPath === "string" && data.configPath.trim() !== ""
+      ? data.configPath.trim()
+      : null;
+  return { rootPath, configPath };
 }
 
 function setRootPathOverride(rootPath) {
@@ -42,7 +46,18 @@ function setRootPathOverride(rootPath) {
   writeRawSettings(data);
 }
 
+function setConfigPathOverride(configPath) {
+  const data = readRawSettings();
+  if (configPath == null || String(configPath).trim() === "") {
+    delete data.configPath;
+  } else {
+    data.configPath = String(configPath).trim();
+  }
+  writeRawSettings(data);
+}
+
 module.exports = {
   getUserSettingsForRenderer,
   setRootPathOverride,
+  setConfigPathOverride,
 };

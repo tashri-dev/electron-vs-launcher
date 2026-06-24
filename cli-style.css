@@ -426,6 +426,52 @@ html[data-theme="dark"] .app-settings-modal .modal-header .btn-close:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.app-branch-select {
+  width: auto;
+  background-color: var(--brand-paper);
+  border-color: rgba(10, 10, 10, 0.18);
+  border-radius: var(--brand-radius-sm);
+  color: var(--brand-ink-soft);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding-block: 0.45rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.app-branch-select:hover {
+  border-color: var(--brand-purple);
+  color: var(--brand-purple-deep);
+  background-color: rgba(172, 44, 237, 0.06);
+}
+
+.app-branch-select:focus {
+  border-color: var(--brand-purple);
+  box-shadow: 0 0 0 0.2rem rgba(172, 44, 237, 0.2);
+  color: var(--brand-ink);
+  background-color: var(--brand-paper);
+  outline: none;
+}
+
+html[data-theme="dark"] .app-branch-select {
+  background-color: #221c30;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #e8e0f4;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23c5bdd6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+}
+
+html[data-theme="dark"] .app-branch-select:hover {
+  border-color: var(--brand-purple);
+  color: #fff;
+  background-color: rgba(172, 44, 237, 0.18);
+}
+
+html[data-theme="dark"] .app-branch-select:focus {
+  border-color: var(--brand-purple-soft);
+  box-shadow: 0 0 0 0.2rem rgba(196, 113, 247, 0.25);
+  color: #fff;
+}
+
 .app-toolbar__divider {
   width: 1px;
   align-self: stretch;
