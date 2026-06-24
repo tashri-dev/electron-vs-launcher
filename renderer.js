@@ -580,7 +580,8 @@ function launchOnCLI(
     }
 
     // AppleScript to open Terminal and run the command
-    const command = `${envExports}"${dotnetPath}" run --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
+    // --no-launch-profile prevents launchSettings.json from overriding our exported env vars
+    const command = `${envExports}"${dotnetPath}" run --no-launch-profile --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
     const osaScript = [
       'tell application "Terminal"',
       `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
