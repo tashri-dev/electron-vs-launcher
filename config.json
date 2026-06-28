@@ -90,7 +90,7 @@
                 },
                 {
                     "name": "APG Portal",
-                    "category": "node",
+                    "category": "angular",
                     "solutionPath": "APG/APG.Portal",
                     "startupProject": "APG/APG.Portal",
                     "npmScript": "start"
@@ -113,7 +113,7 @@
                 },
                 {
                     "name": "APG eCommerce Smartbox",
-                    "category": "node",
+                    "category": "angualr",
                     "solutionPath": "APG/APG.eCommerceSmartBox",
                     "startupProject": "APG/APG.eCommerceSmartBox",
                     "npmScript": "start"
@@ -121,8 +121,8 @@
                 {
                     "name": "Amwal File Manager",
                     "category": "node",
-                    "solutionPath": "Amwal.FileManager",
-                    "startupProject": "Amwal.FileManager",
+                    "solutionPath": "APG/Amwal.FileManager",
+                    "startupProject": "APG/Amwal.FileManager",
                     "npmScript": "start"
                 }
             ]
@@ -246,7 +246,7 @@
                 },
                 {
                     "name": "AmwalSS Portal",
-                    "category": "node",
+                    "category": "angular",
                     "solutionPath": "AmwalSS/AmwalSS.Portal",
                     "startupProject": "AmwalSS/AmwalSS.Portal",
                     "npmScript": "start"
@@ -331,7 +331,7 @@
                 },
                 {
                     "name": "SRM Portal",
-                    "category": "node",
+                    "category": "angular",
                     "solutionPath": "SRM/SRM.Portal",
                     "startupProject": "SRM/SRM.Portal",
                     "npmScript": "start"

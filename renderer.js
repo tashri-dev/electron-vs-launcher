@@ -347,13 +347,46 @@ function launchSolution(solutionPath) {
   console.log(`Launched Rider for: ${solutionPath}`);
 }
 
+function openInVSCode(folderPath) {
+  if (!fs.existsSync(folderPath)) {
+    showToast(`Path does not exist:\n${folderPath}`, "error");
+    return;
+  }
+  const child = spawn("open", ["-a", "Visual Studio Code", folderPath], {
+    detached: true,
+    stdio: "ignore"
+  });
+  child.on("error", (err) => {
+    toastError(err, "Could not open in VS Code");
+  });
+  child.unref();
+}
+
 // Launch selected checkboxes
 function launchSelectedSolutions() {
+  const dotnetCheckboxes = [];
   document
     .querySelectorAll('input[type="checkbox"]:checked')
     .forEach((checkbox) => {
-      launchSolution(checkbox.value);
+      const cat = checkbox._category || "dotnet";
+      if (cat === "node" || cat === "angular" || cat === "angualr") {
+        openInVSCode(checkbox.value);
+      } else {
+        dotnetCheckboxes.push(checkbox);
+      }
     });
+
+  if (dotnetCheckboxes.length === 0) return;
+
+  isRiderRunning((running) => {
+    const launch = () => dotnetCheckboxes.forEach((cb) => launchSolution(cb.value));
+    if (!running) {
+      preWarmRider();
+      setTimeout(launch, 3000);
+    } else {
+      launch();
+    }
+  });
 }
 
 
@@ -372,22 +405,8 @@ function launchSelectedSolutionsOnCLI() {
     });
 }
 
-// Entry point — ensures Rider is warmed before launching projects
 function launchSelectedSolutionsSafely() {
-  isRiderRunning((running) => {
-    if (!running) {
-      console.log("Rider is not running. Launching in background...");
-      preWarmRider();
-
-      // Wait 3 seconds to allow it to boot up before launching solutions
-      setTimeout(() => {
-        launchSelectedSolutions();
-      }, 3000);
-    } else {
-      console.log("Rider is already running. Launching solutions immediately.");
-      launchSelectedSolutions();
-    }
-  });
+  launchSelectedSolutions();
 }
 
 
