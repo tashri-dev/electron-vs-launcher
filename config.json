@@ -233,6 +233,30 @@
                     "dockerPort": "44358",
                     "contextFolder": "AmwalSS.PortalAPIGateway",
                     "imageContainerName": "amwalss-portal-gateway"
+                },
+                {
+                    "name": "AmwalSS Notification",
+                    "category": "dotnet",
+                    "startupProject": "AmwalSS.Notification/src/AmwalSSNotifications.Services.Api/AmwalSSNotifications.Services.Api.csproj",
+                    "solutionPath": "AmwalSS.Notification/AmwalSSNotifications.sln",
+                    "migratorPath": "AmwalSS.Notification/src/AmwalSSNotification.MigrationTools/AmwalSSNotification.MigrationTools.csproj",
+                    "dockerPort": "44312",
+                    "contextFolder": "AmwalSS.Notification",
+                    "imageContainerName": "amwalss-notification"
+                },
+                {
+                    "name": "AmwalSS Portal",
+                    "category": "node",
+                    "solutionPath": "AmwalSS.Portal",
+                    "startupProject": "AmwalSS.Portal",
+                    "npmScript": "start"
+                },
+                {
+                    "name": "AmwalSS Portal Proxy",
+                    "category": "node",
+                    "solutionPath": "AmwalSS.PortalProxy",
+                    "startupProject": "AmwalSS.PortalProxy",
+                    "npmScript": "start"
                 }
             ]
         },
