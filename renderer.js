@@ -1,7 +1,22 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { exec, spawn } = require("child_process");
+const { exec, execFile, spawn } = require("child_process");
+const { promisify } = require("util");
+
+const execFileAsync = promisify(execFile);
+const GIT_TIMEOUT_MS = 20000;
+const GIT_FETCH_TIMEOUT_MS = 120000;
+const GIT_FETCH_CONCURRENCY = 4;
+const GIT_CHECKOUT_CONCURRENCY = 4;
+const SWITCHABLE_BRANCHES = ["master_dev", "master_sit", "master_uat", "master_oci"];
+const SWITCHABLE_BRANCH_SET = new Set(SWITCHABLE_BRANCHES);
+
+/** @type {Map<string, Set<HTMLSelectElement>>} */
+const branchSelectsByRepo = new Map();
+/** @type {Map<string, { branches: string[], current: string }>} */
+const branchStateByRepo = new Map();
+let globalBranchRefreshTimer = null;
 
 /** Migrated once to user-settings.json (userData); safe to remove later */
 const LEGACY_ROOT_PATH_STORAGE_KEY = "electron-vs-launcher-root-path";
@@ -94,6 +109,357 @@ function formatGitExecError(error, stderr) {
   }
   const message = formatErrorReason(error);
   return message.replace(/^Command failed: [^\n]+\n?/, "").trim() || message;
+}
+
+async function gitExec(repoDir, args, options = {}) {
+  try {
+    const { stdout, stderr } = await execFileAsync("git", ["-C", repoDir, ...args], {
+      timeout: options.timeout ?? GIT_TIMEOUT_MS,
+      maxBuffer: 1024 * 1024,
+    });
+    return { stdout: String(stdout), stderr: String(stderr) };
+  } catch (error) {
+    throw new Error(formatGitExecError(error, error.stderr));
+  }
+}
+
+async function runWithConcurrency(items, concurrency, worker) {
+  const pending = new Set();
+  for (const item of items) {
+    const task = Promise.resolve()
+      .then(() => worker(item))
+      .finally(() => pending.delete(task));
+    pending.add(task);
+    if (pending.size >= concurrency) {
+      await Promise.race(pending);
+    }
+  }
+  await Promise.all(pending);
+}
+
+function parseGitRefNames(stdout) {
+  const seen = new Set();
+  const branches = [];
+  for (const raw of String(stdout).split("\n")) {
+    let name = raw.trim();
+    if (!name || name === "HEAD" || name.endsWith("/HEAD")) {
+      continue;
+    }
+    if (name.startsWith("origin/")) {
+      name = name.slice("origin/".length);
+    } else if (name.startsWith("remotes/origin/")) {
+      name = name.slice("remotes/origin/".length);
+    } else if (name.startsWith("remotes/")) {
+      const parts = name.split("/");
+      if (parts.length >= 3) {
+        name = parts.slice(2).join("/");
+      }
+    }
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    branches.push(name);
+  }
+  return branches;
+}
+
+async function listGitBranches(repoDir) {
+  const [{ stdout: currentRaw }, { stdout: refsRaw }] = await Promise.all([
+    gitExec(repoDir, ["rev-parse", "--abbrev-ref", "HEAD"]),
+    gitExec(repoDir, [
+      "for-each-ref",
+      "--sort=-committerdate",
+      "--format=%(refname:short)",
+      "refs/heads",
+      "refs/remotes",
+    ]),
+  ]);
+  const current = currentRaw.trim();
+  const found = new Set(parseGitRefNames(refsRaw));
+  if (current) {
+    found.add(current);
+  }
+  const branches = SWITCHABLE_BRANCHES.filter((branch) => found.has(branch));
+  return { branches, current };
+}
+
+function setBranchSelectPlaceholder(select, text) {
+  select.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = text;
+  select.appendChild(option);
+  select.disabled = true;
+  select._currentBranch = "";
+}
+
+function fillBranchSelect(select, branches, current) {
+  select.replaceChildren();
+  const currentSwitchable = SWITCHABLE_BRANCH_SET.has(current);
+
+  if (current && !currentSwitchable) {
+    const other = document.createElement("option");
+    other.value = "";
+    other.textContent = current;
+    other.disabled = true;
+    other.selected = true;
+    select.appendChild(other);
+  }
+
+  for (const branch of branches) {
+    const option = document.createElement("option");
+    option.value = branch;
+    option.textContent = branch;
+    if (currentSwitchable && branch === current) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  }
+  select._currentBranch = current || "";
+  select.disabled = branches.length === 0;
+  select.title = current ? `Current branch: ${current}` : "Switch git branch";
+}
+
+function registerBranchSelect(repoDir, select) {
+  if (!branchSelectsByRepo.has(repoDir)) {
+    branchSelectsByRepo.set(repoDir, new Set());
+  }
+  branchSelectsByRepo.get(repoDir).add(select);
+}
+
+async function loadBranchesIntoSelect(select, repoDir) {
+  setBranchSelectPlaceholder(select, "Loading…");
+  try {
+    const { branches, current } = await listGitBranches(repoDir);
+    branchStateByRepo.set(repoDir, { branches, current });
+    if (branches.length === 0) {
+      setBranchSelectPlaceholder(select, "No branches");
+      scheduleRefreshGlobalBranchSelect();
+      return;
+    }
+    fillBranchSelect(select, branches, current);
+  } catch (err) {
+    branchStateByRepo.delete(repoDir);
+    setBranchSelectPlaceholder(select, "Unavailable");
+    select.title = formatErrorReason(err);
+  }
+  scheduleRefreshGlobalBranchSelect();
+}
+
+function scheduleRefreshGlobalBranchSelect() {
+  if (globalBranchRefreshTimer) {
+    clearTimeout(globalBranchRefreshTimer);
+  }
+  globalBranchRefreshTimer = setTimeout(() => {
+    globalBranchRefreshTimer = null;
+    refreshGlobalBranchSelect();
+  }, 80);
+}
+
+function refreshGlobalBranchSelect() {
+  const select = document.getElementById("globalBranchSelect");
+  if (!select || select.dataset.switching === "1") {
+    return;
+  }
+
+  const states = [...branchStateByRepo.values()];
+  if (states.length === 0) {
+    setBranchSelectPlaceholder(select, "No branches");
+    return;
+  }
+
+  const counts = new Map();
+  const currents = new Set();
+  for (const { branches, current } of states) {
+    if (current) {
+      currents.add(current);
+    }
+    for (const branch of branches) {
+      counts.set(branch, (counts.get(branch) || 0) + 1);
+    }
+  }
+
+  const allBranches = SWITCHABLE_BRANCHES.filter((branch) => counts.has(branch));
+  const uniqueCurrents = [...currents];
+  const commonCurrent =
+    uniqueCurrents.length === 1 && SWITCHABLE_BRANCH_SET.has(uniqueCurrents[0])
+      ? uniqueCurrents[0]
+      : "";
+  fillGlobalBranchSelect(select, allBranches, commonCurrent, states.length, counts);
+}
+
+function fillGlobalBranchSelect(select, branches, current, repoCount, counts) {
+  select.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = current ? "Switch all to…" : "Mixed branches";
+  select.appendChild(placeholder);
+
+  for (const branch of branches) {
+    const option = document.createElement("option");
+    option.value = branch;
+    const n = counts.get(branch) || 0;
+    option.textContent = n === repoCount ? branch : `${branch} (${n})`;
+    if (branch === current) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  }
+
+  if (!current) {
+    placeholder.selected = true;
+  }
+
+  select.disabled = branches.length === 0;
+  select._currentBranch = current || "";
+  select.title = current
+    ? `All repositories on ${current}`
+    : "Repositories are on different branches";
+}
+
+async function onGlobalBranchChange() {
+  const select = document.getElementById("globalBranchSelect");
+  if (!select) {
+    return;
+  }
+
+  const branch = select.value;
+  const prev = select._currentBranch || "";
+  if (!branch || branch === prev || !SWITCHABLE_BRANCH_SET.has(branch)) {
+    if (!branch || !SWITCHABLE_BRANCH_SET.has(branch)) {
+      refreshGlobalBranchSelect();
+    }
+    return;
+  }
+
+  const targets = collectUniqueRepoTargets();
+  if (targets.length === 0) {
+    showToast("No repositories found to switch", "info");
+    refreshGlobalBranchSelect();
+    return;
+  }
+
+  select.disabled = true;
+  select.dataset.switching = "1";
+  showToast(
+    `Switching ${targets.length} ${targets.length === 1 ? "repo" : "repos"} to ${branch}…`,
+    "info"
+  );
+
+  const failures = [];
+  let succeeded = 0;
+  let skipped = 0;
+
+  try {
+    await runWithConcurrency(targets, GIT_CHECKOUT_CONCURRENCY, async ({ repoDir, name }) => {
+      if (branchStateByRepo.get(repoDir)?.current === branch) {
+        skipped += 1;
+        return;
+      }
+      try {
+        await gitExec(repoDir, ["checkout", branch]);
+        succeeded += 1;
+        await Promise.all(
+          [...(branchSelectsByRepo.get(repoDir) || [])].map((el) =>
+            loadBranchesIntoSelect(el, repoDir)
+          )
+        );
+      } catch (err) {
+        failures.push({ name, error: formatErrorReason(err) });
+      }
+    });
+  } finally {
+    select.dataset.switching = "0";
+    refreshGlobalBranchSelect();
+  }
+
+  if (failures.length === 0) {
+    if (succeeded === 0 && skipped > 0) {
+      showToast(`All repos already on ${branch}`, "info");
+      return;
+    }
+    const extra = skipped > 0 ? ` (${skipped} already on it)` : "";
+    showToast(`Switched ${succeeded} ${succeeded === 1 ? "repo" : "repos"} to ${branch}${extra}`, "success");
+    return;
+  }
+
+  const detail = failures
+    .slice(0, 8)
+    .map((item) => `${item.name}: ${item.error}`)
+    .join("\n");
+  const extra =
+    failures.length > 8 ? `\n…and ${failures.length - 8} more` : "";
+  showToast(
+    `Switched ${succeeded} of ${targets.length} repos to ${branch}\n${detail}${extra}`,
+    succeeded > 0 ? "info" : "error"
+  );
+}
+
+function refreshBranchSelectsForRepo(repoDir) {
+  const selects = branchSelectsByRepo.get(repoDir);
+  if (!selects) {
+    return;
+  }
+  selects.forEach((select) => {
+    loadBranchesIntoSelect(select, repoDir);
+  });
+}
+
+async function onBranchSelectChange(select, repoDir, name) {
+  const next = select.value;
+  const prev = select._currentBranch || "";
+  if (!next || next === prev || !SWITCHABLE_BRANCH_SET.has(next)) {
+    return;
+  }
+
+  select.disabled = true;
+  try {
+    await gitExec(repoDir, ["checkout", next]);
+    showToast(`Switched ${name} to ${next}`, "success");
+    await Promise.all(
+      [...(branchSelectsByRepo.get(repoDir) || [])].map((el) =>
+        loadBranchesIntoSelect(el, repoDir)
+      )
+    );
+  } catch (err) {
+    showToast(
+      `Could not switch branch (${name}):\n${formatErrorReason(err)}`,
+      "error"
+    );
+    select.value = prev;
+    select.disabled = false;
+  }
+}
+
+function createBranchCell(solution, rootPath) {
+  const td = document.createElement("td");
+  const select = document.createElement("select");
+  select.classList.add("form-select", "form-select-sm", "app-branch-select");
+  select.setAttribute("aria-label", `Git branch for ${solution.name}`);
+  select.title = "Switch git branch";
+  setBranchSelectPlaceholder(select, "Loading…");
+  td.appendChild(select);
+
+  const target = resolveGetLatestTarget(solution.solutionPath, rootPath);
+  if (target.error) {
+    setBranchSelectPlaceholder(select, "Unavailable");
+    select.title =
+      typeof target.error === "string"
+        ? target.error
+        : formatErrorReason(target.error);
+    return td;
+  }
+
+  select.dataset.repoDir = target.repoDir;
+  select.dataset.solutionName = solution.name;
+  registerBranchSelect(target.repoDir, select);
+  select.addEventListener("change", () => {
+    onBranchSelectChange(select, target.repoDir, solution.name);
+  });
+  loadBranchesIntoSelect(select, target.repoDir);
+  return td;
 }
 
 function resolveGetLatestTarget(solutionPath, rootPath) {
@@ -296,6 +662,10 @@ document
   .getElementById("selectAllBtn")
   .addEventListener("click", selectAllCheckboxes);
 document.getElementById('get-latest-selected').addEventListener('click', getLatestFromSelected);
+document.getElementById("fetchAllBtn").addEventListener("click", fetchAllRepos);
+document
+  .getElementById("globalBranchSelect")
+  .addEventListener("change", onGlobalBranchChange);
 
 const riderPath = "/Applications/Rider.app/Contents/MacOS/rider";
 
@@ -390,6 +760,96 @@ function launchSelectedSolutionsSafely() {
 }
 
 
+function collectUniqueRepoTargets() {
+  const seen = new Map();
+  document
+    .querySelectorAll('#solutionsContainer input[type="checkbox"]')
+    .forEach((checkbox) => {
+      const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
+      if (target.error || seen.has(target.repoDir)) {
+        return;
+      }
+      const labelName = checkbox.nextElementSibling?.textContent?.trim();
+      seen.set(target.repoDir, {
+        repoDir: target.repoDir,
+        name: labelName || target.name,
+      });
+    });
+  return [...seen.values()];
+}
+
+let fetchAllInFlight = false;
+
+async function fetchAllRepos() {
+  if (fetchAllInFlight) {
+    showToast("Fetch all is already running", "info");
+    return;
+  }
+
+  const targets = collectUniqueRepoTargets();
+  if (targets.length === 0) {
+    showToast("No repositories found to fetch", "info");
+    return;
+  }
+
+  fetchAllInFlight = true;
+  const btn = document.getElementById("fetchAllBtn");
+  const originalHtml = btn?.innerHTML;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1" aria-hidden="true"></i> Fetching…';
+  }
+
+  showToast(
+    `Fetching ${targets.length} ${targets.length === 1 ? "repo" : "repos"}…`,
+    "info"
+  );
+
+  const failures = [];
+  let succeeded = 0;
+
+  try {
+    await runWithConcurrency(targets, GIT_FETCH_CONCURRENCY, async ({ repoDir, name }) => {
+      try {
+        await gitExec(repoDir, ["fetch", "--all", "--prune"], {
+          timeout: GIT_FETCH_TIMEOUT_MS,
+        });
+        succeeded += 1;
+        refreshBranchSelectsForRepo(repoDir);
+      } catch (err) {
+        failures.push({ name, error: formatErrorReason(err) });
+      }
+    });
+  } finally {
+    fetchAllInFlight = false;
+    if (btn) {
+      btn.disabled = false;
+      if (originalHtml) {
+        btn.innerHTML = originalHtml;
+      }
+    }
+  }
+
+  if (failures.length === 0) {
+    showToast(
+      `Fetched ${succeeded} ${succeeded === 1 ? "repo" : "repos"}`,
+      "success"
+    );
+    return;
+  }
+
+  const detail = failures
+    .slice(0, 8)
+    .map((item) => `${item.name}: ${item.error}`)
+    .join("\n");
+  const extra =
+    failures.length > 8 ? `\n…and ${failures.length - 8} more` : "";
+  showToast(
+    `Fetched ${succeeded} of ${targets.length} repos\n${detail}${extra}`,
+    succeeded > 0 ? "info" : "error"
+  );
+}
+
 function getLatestFromSelected() {
   const seenRepoDirs = new Set();
 
@@ -438,6 +898,36 @@ function selectAllCheckboxes() {
 }
 
 
+function getSelectedBranchForRepo(repoDir) {
+  const state = branchStateByRepo.get(repoDir);
+  if (state?.current) {
+    return state.current;
+  }
+  const selects = branchSelectsByRepo.get(repoDir);
+  if (selects) {
+    for (const select of selects) {
+      const branch = select._currentBranch || select.value;
+      if (branch) {
+        return branch;
+      }
+    }
+  }
+  return "";
+}
+
+async function resolveBranchForGetLatest(repoDir) {
+  const selected = String(getSelectedBranchForRepo(repoDir) || "").trim();
+  if (selected) {
+    return selected;
+  }
+  const { stdout } = await gitExec(repoDir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const current = stdout.trim();
+  if (!current || current === "HEAD") {
+    throw new Error("Could not determine the selected branch");
+  }
+  return current;
+}
+
 function getLatest(solutionPath, rootPath) {
   const target = resolveGetLatestTarget(solutionPath, rootPath);
   if (target.error) {
@@ -451,7 +941,7 @@ function getLatest(solutionPath, rootPath) {
   runGetLatest(target.repoDir, target.name);
 }
 
-function runGetLatest(repoDir, name) {
+async function runGetLatest(repoDir, name) {
   if (getLatestInFlight.has(repoDir)) {
     showToast(`Get latest already running for ${name}`, "info");
     return;
@@ -459,25 +949,28 @@ function runGetLatest(repoDir, name) {
 
   getLatestInFlight.add(repoDir);
 
-  exec(
-    `cd "${repoDir}" && git checkout master_dev && git pull`,
-    (error, stdout, stderr) => {
-      getLatestInFlight.delete(repoDir);
-
-      if (error) {
-        showToast(
-          `Get latest failed (${name}):\n${formatGitExecError(error, stderr)}`,
-          "error"
-        );
-        return;
-      }
-      const okMsg = [stdout].filter(Boolean).join("").trim();
-      showToast(
-        okMsg ? `Get latest: ${name}\n${okMsg}` : `Get latest succeeded: ${name}`,
-        "success"
-      );
-    }
-  );
+  try {
+    const branch = await resolveBranchForGetLatest(repoDir);
+    await gitExec(repoDir, ["checkout", branch]);
+    const { stdout, stderr } = await gitExec(repoDir, ["pull"], {
+      timeout: GIT_FETCH_TIMEOUT_MS,
+    });
+    const okMsg = [stdout, stderr].filter(Boolean).join("").trim();
+    showToast(
+      okMsg
+        ? `Get latest: ${name} (${branch})\n${okMsg}`
+        : `Get latest succeeded: ${name} (${branch})`,
+      "success"
+    );
+    refreshBranchSelectsForRepo(repoDir);
+  } catch (err) {
+    showToast(
+      `Get latest failed (${name}):\n${formatErrorReason(err)}`,
+      "error"
+    );
+  } finally {
+    getLatestInFlight.delete(repoDir);
+  }
 }
 
 function showNotification(title, message, state) {
@@ -606,6 +1099,10 @@ function createSolutionsTable(solutions, rootPath) {
   nameHeader.textContent = "Solution Name";
   nameHeader.classList.add("text-nowrap");
 
+  const branchHeader = document.createElement("th");
+  branchHeader.textContent = "Branch";
+  branchHeader.classList.add("text-nowrap");
+
   const getLatestHeader = document.createElement("th");
   getLatestHeader.textContent = "Get Latest";
   getLatestHeader.classList.add("text-nowrap");
@@ -623,6 +1120,7 @@ function createSolutionsTable(solutions, rootPath) {
   dockerizeHeader.classList.add("text-nowrap");
 
   headerRow.appendChild(nameHeader);
+  headerRow.appendChild(branchHeader);
   headerRow.appendChild(getLatestHeader);
   headerRow.appendChild(updateDbHeader);
   headerRow.appendChild(runInConsoleHeader);
@@ -706,6 +1204,7 @@ function createSolutionsTable(solutions, rootPath) {
     }
 
     row.appendChild(checkboxTd);
+    row.appendChild(createBranchCell(solution, rootPath));
     row.appendChild(getLatestTd);
     row.appendChild(updateDbTd);
     row.appendChild(runInConsoleTd);
@@ -724,6 +1223,9 @@ function createSolutionsTable(solutions, rootPath) {
 function loadSolutionsFromConfig(config) {
   const solutionsContainer = document.getElementById("solutionsContainer");
   solutionsContainer.replaceChildren();
+  branchSelectsByRepo.clear();
+  branchStateByRepo.clear();
+  scheduleRefreshGlobalBranchSelect();
 
   const rootPath = config.rootPath;
 

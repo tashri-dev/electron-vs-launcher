@@ -580,6 +580,32 @@ html[data-theme="dark"] .app-settings-modal .modal-header .btn-close:hover {
   color: var(--brand-ink-soft);
 }
 
+.app-branch-select {
+  min-width: 11rem;
+  max-width: 16rem;
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding-top: 0.28rem;
+  padding-bottom: 0.28rem;
+}
+
+.app-global-branch-select {
+  min-width: 13.5rem;
+  max-width: 20rem;
+}
+
+html[data-theme="dark"] .app-branch-select {
+  background-color: #15121c;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f2eef9;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23c5bdd6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+}
+
+html[data-theme="dark"] .app-branch-select:focus {
+  border-color: var(--brand-purple-soft);
+  box-shadow: 0 0 0 0.2rem rgba(196, 113, 247, 0.25);
+}
+
 /* —— Accordion —— */
 .app-accordion.accordion {
   --bs-accordion-border-radius: var(--brand-radius-sm);
