@@ -656,6 +656,10 @@ document
   .getElementById("launchBtnForCLI")
   .addEventListener("click", launchSelectedSolutionsOnCLI);
 
+document
+  .getElementById("openInCursorBtn")
+  .addEventListener("click", openSelectedReposInCursor);
+
 
 document.getElementById("clearBtn").addEventListener("click", clearSelections);
 document
@@ -760,22 +764,106 @@ function launchSelectedSolutionsSafely() {
 }
 
 
-function collectUniqueRepoTargets() {
+function collectUniqueRepoTargets({ selectedOnly = false } = {}) {
   const seen = new Map();
-  document
-    .querySelectorAll('#solutionsContainer input[type="checkbox"]')
-    .forEach((checkbox) => {
-      const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
-      if (target.error || seen.has(target.repoDir)) {
-        return;
-      }
-      const labelName = checkbox.nextElementSibling?.textContent?.trim();
-      seen.set(target.repoDir, {
-        repoDir: target.repoDir,
-        name: labelName || target.name,
-      });
+  const selector = selectedOnly
+    ? '#solutionsContainer input[type="checkbox"]:checked'
+    : '#solutionsContainer input[type="checkbox"]';
+  document.querySelectorAll(selector).forEach((checkbox) => {
+    const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
+    if (target.error || seen.has(target.repoDir)) {
+      return;
+    }
+    const labelName = checkbox.nextElementSibling?.textContent?.trim();
+    seen.set(target.repoDir, {
+      repoDir: target.repoDir,
+      name: labelName || target.name,
     });
+  });
   return [...seen.values()];
+}
+
+function runDetached(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.on("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+function findCursorCommand() {
+  const cursorApp = "/Applications/Cursor.app";
+  const binaries = [
+    "/usr/local/bin/cursor",
+    "/opt/homebrew/bin/cursor",
+    path.join(cursorApp, "Contents", "Resources", "app", "bin", "cursor"),
+  ];
+  const bin = binaries.find((candidate) => fs.existsSync(candidate));
+  if (bin) {
+    return { command: bin, args: [] };
+  }
+  if (process.platform === "darwin" && fs.existsSync(cursorApp)) {
+    return { command: "open", args: ["-a", "Cursor"] };
+  }
+  return null;
+}
+
+async function writeCursorWorkspaceFile(targets) {
+  const workspace = {
+    folders: targets.map(({ repoDir, name }) => ({
+      name,
+      path: repoDir,
+    })),
+  };
+  const payload = JSON.stringify(workspace, null, 2) + "\n";
+  const candidates = [
+    effectiveRootPath
+      ? path.join(effectiveRootPath, "amwal-pay-launcher.code-workspace")
+      : "",
+    path.join(os.tmpdir(), "amwal-pay-launcher.code-workspace"),
+  ].filter(Boolean);
+
+  let lastError = null;
+  for (const filePath of candidates) {
+    try {
+      await fs.promises.writeFile(filePath, payload, "utf8");
+      return filePath;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error("Could not write Cursor workspace file");
+}
+
+async function openSelectedReposInCursor() {
+  const targets = collectUniqueRepoTargets({ selectedOnly: true });
+  if (targets.length === 0) {
+    showToast("Select at least one solution to open in Cursor", "info");
+    return;
+  }
+
+  const cursor = findCursorCommand();
+  if (!cursor) {
+    showToast("Cursor is not installed", "error");
+    return;
+  }
+
+  try {
+    const workspacePath = await writeCursorWorkspaceFile(targets);
+    await runDetached(cursor.command, [...cursor.args, workspacePath]);
+    showToast(
+      `Opened ${targets.length} ${targets.length === 1 ? "repo" : "repos"} in Cursor`,
+      "success"
+    );
+  } catch (err) {
+    toastError(err, "Could not open Cursor workspace");
+  }
 }
 
 let fetchAllInFlight = false;
@@ -1115,16 +1203,11 @@ function createSolutionsTable(solutions, rootPath) {
   runInConsoleHeader.textContent = "Run In Console";
   runInConsoleHeader.classList.add("text-nowrap");
 
-  const dockerizeHeader = document.createElement("th");
-  dockerizeHeader.textContent = "Dockerize";
-  dockerizeHeader.classList.add("text-nowrap");
-
   headerRow.appendChild(nameHeader);
   headerRow.appendChild(branchHeader);
   headerRow.appendChild(getLatestHeader);
   headerRow.appendChild(updateDbHeader);
   headerRow.appendChild(runInConsoleHeader);
-  headerRow.appendChild(dockerizeHeader);
   thead.appendChild(headerRow);
 
   const tbody = document.createElement("tbody");
@@ -1192,23 +1275,11 @@ function createSolutionsTable(solutions, rootPath) {
       runInConsoleTd.appendChild(runInConsoleEl);
     }
 
-    // Dockerize button column
-    const dockerizeTd = document.createElement("td");
-    dockerizeTd.classList.add("text-nowrap");
-    if (solution.contextFolder) {
-      const dockerizeButton = document.createElement("button");
-      dockerizeButton.classList.add("btn", "btn-primary", "btn-sm");
-      dockerizeButton.textContent = "Dockerize";
-      dockerizeButton.onclick = () => dockerizeApp(solution, rootPath);
-      dockerizeTd.appendChild(dockerizeButton);
-    }
-
     row.appendChild(checkboxTd);
     row.appendChild(createBranchCell(solution, rootPath));
     row.appendChild(getLatestTd);
     row.appendChild(updateDbTd);
     row.appendChild(runInConsoleTd);
-    row.appendChild(dockerizeTd);
 
     tbody.appendChild(row);
   });
@@ -1304,56 +1375,6 @@ function loadSolutionsFromConfig(config) {
   });
 
   solutionsContainer.appendChild(accordion);
-}
-
-function dockerizeApp(solution, rootPath) {
-  const dockerFilePath = path.join(rootPath, solution.contextFolder, "dev-dockerfile");
-  const dockerBuildCommand = `docker buildx build --pull --rm -t ${solution.imageContainerName}:latest -f ${dockerFilePath} ${path.join(rootPath, solution.contextFolder)}`;
-  const dockerRunCommand = `docker run -d -p ${solution.dockerPort}:${solution.dockerPort} --name ${solution.imageContainerName} ${solution.imageContainerName}`;
-  const dockerPruneCommand = `docker image prune -f`;
-
-  const buildOptions = { shell: true, stdio: 'inherit' };
-  const buildProcess = spawn('/bin/bash', ['-c', dockerBuildCommand], buildOptions);
-  buildProcess.on('error', (err) => {
-    toastError(err, "Docker build");
-  });
-
-  buildProcess.on('close', (code) => {
-    if (code !== 0) {
-      showToast(`Docker build failed for ${solution.name} (exit ${code}).`, "error");
-      return;
-    }
-
-    console.log(`Docker image built for ${solution.name}.`);
-
-    const runProcess = spawn('/bin/bash', ['-c', dockerRunCommand], buildOptions);
-    runProcess.on('error', (err) => {
-      toastError(err, "Docker run");
-    });
-
-    runProcess.on('close', (code) => {
-      if (code !== 0) {
-        showToast(`Docker run failed for ${solution.name} (exit ${code}).`, "error");
-        return;
-      }
-
-      console.log(`Docker container running for ${solution.name}.`);
-
-      const pruneProcess = spawn('/bin/bash', ['-c', dockerPruneCommand], buildOptions);
-      pruneProcess.on('error', (err) => {
-        toastError(err, "Docker prune");
-      });
-
-      pruneProcess.on('close', (code) => {
-        if (code !== 0) {
-          showToast(`Docker image prune failed (exit ${code}).`, "error");
-          return;
-        }
-
-        console.log(`Dangling images removed.`);
-      });
-    });
-  });
 }
 
 function syncRootPathInput(resolvedPath) {
