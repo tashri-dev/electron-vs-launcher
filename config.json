@@ -86,14 +86,16 @@
                     "category": "node",
                     "solutionPath": "APG/APG.Portal.Proxy",
                     "startupProject": "APG/APG.Portal.Proxy",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "APG Portal",
                     "category": "angular",
                     "solutionPath": "APG/APG.Portal",
                     "startupProject": "APG/APG.Portal",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "APG Smartbox API Gateway",
@@ -109,21 +111,24 @@
                     "category": "node",
                     "solutionPath": "APG/APG.eCommerceSmartBox.Proxy",
                     "startupProject": "APG/APG.eCommerceSmartBox.Proxy",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "APG eCommerce Smartbox",
                     "category": "angualr",
                     "solutionPath": "APG/APG.eCommerceSmartBox",
                     "startupProject": "APG/APG.eCommerceSmartBox",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "Amwal File Manager",
                     "category": "node",
                     "solutionPath": "APG/Amwal.FileManager",
                     "startupProject": "APG/Amwal.FileManager",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 }
             ]
         },
@@ -203,7 +208,7 @@
                     "name": "AmwalSS Fundamental",
                     "category": "dotnet",
                     "startupProject": "AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.Services.Api/AmwalSSFundamental.Services.Api.csproj",
-                    "solutionPath": "AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.slnx",
+                    "solutionPath": "AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.sln",
                     "migratorPath": "AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.MigrationTools/AmwalSSFundamental.MigrationTools.csproj",
                     "dockerPort": "44309",
                     "contextFolder": "AmwalSS.Fundamental",
@@ -223,7 +228,7 @@
                     "name": "AmwalSS Log",
                     "category": "dotnet",
                     "startupProject": "AmwalSS/AmwalSS.LogModulesAPIs/src/AmwalSSLog.Services.Api/AmwalSSLog.Services.Api.csproj",
-                    "solutionPath": "AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.slnx",
+                    "solutionPath": "AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.sln",
                     "dockerPort": "44350",
                     "contextFolder": "AmwalSS.LogModulesAPIs",
                     "imageContainerName": "amwalss-log"
@@ -232,7 +237,7 @@
                     "name": "AmwalSS Portal Gateway",
                     "category": "dotnet",
                     "startupProject": "AmwalSS/AmwalSS.PortalAPIGateway/src/AmwalSSPortal.Services.Api/AmwalSSPortal.Services.Api.csproj",
-                    "solutionPath": "AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.slnx",
+                    "solutionPath": "AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.sln",
                     "dockerPort": "44358",
                     "contextFolder": "AmwalSS.PortalAPIGateway",
                     "imageContainerName": "amwalss-portal-gateway"
@@ -242,14 +247,16 @@
                     "category": "node",
                     "solutionPath": "AmwalSS/AmwalSS.PortalProxy",
                     "startupProject": "AmwalSS/AmwalSS.PortalProxy",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "AmwalSS Portal",
                     "category": "angular",
                     "solutionPath": "AmwalSS/AmwalSS.Portal",
                     "startupProject": "AmwalSS/AmwalSS.Portal",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 }
             ]
         },
@@ -327,14 +334,16 @@
                     "category": "node",
                     "solutionPath": "SRM/SRM.Portal.Proxy",
                     "startupProject": "SRM/SRM.Portal.Proxy",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "SRM Portal",
                     "category": "angular",
                     "solutionPath": "SRM/SRM.Portal",
                     "startupProject": "SRM/SRM.Portal",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 }
             ]
         },
@@ -385,14 +394,16 @@
                     "category": "node",
                     "solutionPath": "TMS/TMS.Portal.Proxy",
                     "startupProject": "TMS/TMS.Portal.Proxy",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 },
                 {
                     "name": "TMS Portal",
                     "category": "node",
                     "solutionPath": "TMS/TMS.Portal",
                     "startupProject": "TMS/TMS.Portal",
-                    "npmScript": "start"
+                    "npmScript": "start",
+                    "port": null
                 }
             ]
         }

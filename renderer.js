@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const net = require("net");
 const { exec, spawn } = require("child_process");
 
 /** Migrated once to user-settings.json (userData); safe to remove later */
@@ -362,6 +363,315 @@ function openInVSCode(folderPath) {
   child.unref();
 }
 
+// —— Status monitoring (port-based) ——
+
+const STATUS_POLL_INTERVAL_MS = 5000;
+let statusRows = [];
+let statusPollTimer = null;
+
+function parsePortFromUrl(urlStr) {
+  try {
+    const u = new URL(String(urlStr).trim());
+    if (u.port) {
+      return parseInt(u.port, 10);
+    }
+    return u.protocol === "https:" ? 443 : 80;
+  } catch {
+    return null;
+  }
+}
+
+function firstPortFromUrls(urlsStr) {
+  if (!urlsStr) {
+    return null;
+  }
+  const parts = String(urlsStr)
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const part of parts) {
+    const port = parsePortFromUrl(part);
+    if (port) {
+      return port;
+    }
+  }
+  return null;
+}
+
+function readLaunchSettingsPort(startupProjectPath, aspnetCoreEnvironment) {
+  try {
+    const projectDir = fs.statSync(startupProjectPath).isDirectory()
+      ? startupProjectPath
+      : path.dirname(startupProjectPath);
+    const launchSettingsPath = path.join(projectDir, "Properties", "launchSettings.json");
+    if (!fs.existsSync(launchSettingsPath)) {
+      return null;
+    }
+    const json = JSON.parse(fs.readFileSync(launchSettingsPath, "utf-8"));
+    const profiles = Object.values(json.profiles || {});
+
+    let chosen = null;
+    if (aspnetCoreEnvironment) {
+      chosen = profiles.find(
+        (p) => p?.environmentVariables?.ASPNETCORE_ENVIRONMENT === aspnetCoreEnvironment
+      );
+    }
+    if (!chosen) {
+      chosen = profiles.find((p) => p?.commandName === "Project" && p?.applicationUrl);
+    }
+    if (!chosen) {
+      chosen = profiles.find((p) => p?.applicationUrl);
+    }
+    if (!chosen?.applicationUrl) {
+      return null;
+    }
+    return firstPortFromUrls(chosen.applicationUrl);
+  } catch {
+    return null;
+  }
+}
+
+// Resolves the port to monitor for a solution's running status, per the
+// launchProfiles/aspnetCoreUrls the app actually launches with.
+function resolveMonitoredPort(solution, rootPath) {
+  const cat = solution.category || "dotnet";
+
+  if (solution.aspnetCoreUrls) {
+    const port = firstPortFromUrls(solution.aspnetCoreUrls);
+    if (port) {
+      return port;
+    }
+  }
+
+  if (cat === "dotnet") {
+    const startupProjectPath = path.isAbsolute(solution.startupProject)
+      ? solution.startupProject
+      : path.join(rootPath, solution.startupProject);
+    return readLaunchSettingsPort(startupProjectPath, solution.aspnetCoreEnvironment);
+  }
+
+  if (solution.port != null && solution.port !== "") {
+    const n = Number(solution.port);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  return null;
+}
+
+function probePort(port, timeoutMs = 800) {
+  return new Promise((resolve) => {
+    if (!port) {
+      resolve(false);
+      return;
+    }
+    const socket = new net.Socket();
+    let done = false;
+    const finish = (result) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.connect(port, "127.0.0.1");
+  });
+}
+
+function applyLampState(lampEl, state, port) {
+  lampEl.classList.remove("status-lamp--green", "status-lamp--red", "status-lamp--grey");
+  lampEl.classList.add(`status-lamp--${state}`);
+  const label = lampEl.querySelector(".status-lamp__label");
+  if (state === "green") {
+    label.textContent = "Running";
+    lampEl.title = `Listening on port ${port}`;
+  } else if (state === "red") {
+    label.textContent = "Stopped";
+    lampEl.title = `Not listening on port ${port}`;
+  } else {
+    label.textContent = "Unknown";
+    lampEl.title = "No port configured for this solution";
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollStatusRow(row) {
+  const running = row.port ? await probePort(row.port) : false;
+  const state = !row.port ? "grey" : running ? "green" : "red";
+  row.status = state;
+  applyLampState(row.lampEl, state, row.port);
+  row.killBtn.classList.toggle("d-none", state !== "green");
+  row.refreshColumnVisibility?.();
+}
+
+async function pollAllStatuses() {
+  await Promise.all(statusRows.map((row) => pollStatusRow(row)));
+  updateKillSelectedButtonState();
+}
+
+function startStatusPolling() {
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer);
+  }
+  pollAllStatuses();
+  statusPollTimer = setInterval(pollAllStatuses, STATUS_POLL_INTERVAL_MS);
+}
+
+function updateKillSelectedButtonState() {
+  const btn = document.getElementById("killSelectedBtn");
+  if (!btn) {
+    return;
+  }
+  const hasRunningSelected = statusRows.some(
+    (row) => row.checkbox.checked && row.status === "green"
+  );
+  btn.disabled = !hasRunningSelected;
+}
+
+// —— Kill by port ——
+
+function findPidsForPort(port) {
+  return new Promise((resolve) => {
+    if (!port) {
+      resolve([]);
+      return;
+    }
+    exec(`lsof -nP -iTCP:${port} -sTCP:LISTEN -t`, (error, stdout) => {
+      if (error) {
+        resolve([]);
+        return;
+      }
+      const pids = String(stdout)
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(Number)
+        .filter((n) => Number.isFinite(n));
+      resolve(Array.from(new Set(pids)));
+    });
+  });
+}
+
+async function killPort(port, name) {
+  const pids = await findPidsForPort(port);
+  if (pids.length === 0) {
+    showToast(`No process found listening on port ${port} for ${name}.`, "info");
+    return;
+  }
+
+  pids.forEach((pid) => {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      /* ignore */
+    }
+  });
+
+  showToast(`Stopping ${name} (port ${port})…`, "info");
+
+  await delay(1500);
+
+  pids.forEach((pid) => {
+    try {
+      process.kill(pid, 0);
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* already exited */
+    }
+  });
+
+  // Actively re-check rather than waiting for the next auto-poll cycle,
+  // since some processes take longer than one fixed delay to release the port.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await pollAllStatuses();
+    const stillRunning = statusRows.some((r) => r.port === port && r.status === "green");
+    if (!stillRunning) {
+      break;
+    }
+    await delay(500);
+  }
+}
+
+function confirmAction({ title, message, items = [], confirmLabel = "Confirm" }, onConfirm) {
+  const modalEl = document.getElementById("confirmActionModal");
+  if (!modalEl || typeof bootstrap === "undefined") {
+    if (window.confirm([message, ...items].filter(Boolean).join("\n"))) {
+      onConfirm();
+    }
+    return;
+  }
+
+  document.getElementById("confirmActionModalLabel").textContent = title || "Confirm";
+  document.getElementById("confirmActionMessage").textContent = message || "";
+
+  const list = document.getElementById("confirmActionList");
+  list.replaceChildren();
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.appendChild(li);
+  });
+
+  const oldBtn = document.getElementById("confirmActionConfirmBtn");
+  oldBtn.textContent = confirmLabel;
+  const freshBtn = oldBtn.cloneNode(true);
+  oldBtn.replaceWith(freshBtn);
+
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  freshBtn.addEventListener(
+    "click",
+    () => {
+      modal.hide();
+      onConfirm();
+    },
+    { once: true }
+  );
+
+  modal.show();
+}
+
+function runInIdeForSolution(solution, solutionPath, startupProjectPath) {
+  const cat = solution.category || "dotnet";
+  if (cat === "node" || cat === "angular" || cat === "angualr") {
+    openInVSCode(startupProjectPath || solutionPath);
+    return;
+  }
+  isRiderRunning((running) => {
+    const launch = () => launchSolution(solutionPath);
+    if (!running) {
+      preWarmRider();
+      setTimeout(launch, 3000);
+    } else {
+      launch();
+    }
+  });
+}
+
+document.getElementById("killSelectedBtn")?.addEventListener("click", () => {
+  const targets = statusRows.filter((row) => row.checkbox.checked && row.status === "green");
+  if (targets.length === 0) {
+    return;
+  }
+  confirmAction(
+    {
+      title: "Kill selected services",
+      message: `Stop ${targets.length} running solution${targets.length > 1 ? "s" : ""}?`,
+      items: targets.map((t) => `${t.name} — port ${t.port}`),
+      confirmLabel: "Kill selected",
+    },
+    () => {
+      targets.forEach((t) => killPort(t.port, t.name));
+    }
+  );
+});
+
 // Launch selected checkboxes
 function launchSelectedSolutions() {
   const dotnetCheckboxes = [];
@@ -453,12 +763,14 @@ function clearSelections() {
   checkboxes.forEach((checkbox) => {
     checkbox.checked = false;
   });
+  updateKillSelectedButtonState();
 }
 function selectAllCheckboxes() {
   const checkboxes = document.querySelectorAll('input[type="checkbox"]');
   checkboxes.forEach((checkbox) => {
     checkbox.checked = true;
   });
+  updateKillSelectedButtonState();
 }
 
 
@@ -558,7 +870,7 @@ function launchOnCLI(
     const startupProjectPath = path.resolve(startupProject);
     const cat = category || "dotnet";
 
-    if (cat === "node") {
+    if (cat === "node" || cat === "angular" || cat === "angualr") {
       if (!fs.existsSync(startupProjectPath) || !fs.statSync(startupProjectPath).isDirectory()) {
         showToast("Node projects require startupProject to be an existing directory.", "error");
         return;
@@ -598,10 +910,8 @@ function launchOnCLI(
       envExports += `export ASPNETCORE_URLS="${aspnetCoreUrls}"; `;
     }
 
-    // AppleScript to open Terminal and run the command
-    // --no-launch-profile prevents launchSettings.json from overriding our exported env vars
-    const command = `${envExports}"${dotnetPath}" run --no-launch-profile --project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
-    const osaScript = [
+    const noLaunchProfile = aspnetCoreEnvironment ? "--no-launch-profile " : "";
+    const command = `${envExports}"${dotnetPath}" run ${noLaunchProfile}--project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;    const osaScript = [
       'tell application "Terminal"',
       `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
       'activate',
@@ -644,18 +954,46 @@ function createSolutionsTable(solutions, rootPath) {
   runInConsoleHeader.textContent = "Run In Console";
   runInConsoleHeader.classList.add("text-nowrap");
 
+  const runInIdeHeader = document.createElement("th");
+  runInIdeHeader.textContent = "Run In IDE";
+  runInIdeHeader.classList.add("text-nowrap");
+
   const dockerizeHeader = document.createElement("th");
   dockerizeHeader.textContent = "Dockerize";
   dockerizeHeader.classList.add("text-nowrap");
+
+  const statusHeader = document.createElement("th");
+  statusHeader.textContent = "Status";
+  statusHeader.classList.add("text-nowrap");
+
+  const killHeader = document.createElement("th");
+  killHeader.textContent = "Kill";
+  killHeader.classList.add("text-nowrap");
 
   headerRow.appendChild(nameHeader);
   headerRow.appendChild(getLatestHeader);
   headerRow.appendChild(updateDbHeader);
   headerRow.appendChild(runInConsoleHeader);
+  headerRow.appendChild(runInIdeHeader);
   headerRow.appendChild(dockerizeHeader);
+  headerRow.appendChild(statusHeader);
+  headerRow.appendChild(killHeader);
   thead.appendChild(headerRow);
 
   const tbody = document.createElement("tbody");
+
+  const tableStatusCells = [statusHeader];
+  const tableKillCells = [killHeader];
+  const tableRunningFlags = [];
+
+  function refreshColumnVisibility() {
+    const hasRunning = tableRunningFlags.some((flag) => flag.status === "green");
+    tableStatusCells.forEach((cell) => cell.classList.toggle("d-none", !hasRunning));
+    tableKillCells.forEach((cell) => cell.classList.toggle("d-none", !hasRunning));
+  }
+
+  // Hidden by default until the first status poll determines actual state.
+  refreshColumnVisibility();
 
   solutions.forEach((solution) => {
     const row = document.createElement("tr");
@@ -681,6 +1019,8 @@ function createSolutionsTable(solutions, rootPath) {
     checkboxTd.appendChild(checkbox);
     checkboxTd.appendChild(label);
     checkboxTd.classList.add("text-nowrap");
+
+    checkbox.addEventListener("change", updateKillSelectedButtonState);
 
     // Get Latest button column
     const getLatestTd = document.createElement("td");
@@ -720,6 +1060,22 @@ function createSolutionsTable(solutions, rootPath) {
       runInConsoleTd.appendChild(runInConsoleEl);
     }
 
+    // Run In IDE button column
+    const runInIdeTd = document.createElement("td");
+    runInIdeTd.classList.add("text-nowrap");
+    if (solution?.solutionPath != null || solution?.startupProject != null) {
+      const runInIdeEl = document.createElement("button");
+      runInIdeEl.classList.add("btn", "btn-info", "btn-sm");
+      runInIdeEl.innerHTML = '<i class="fa fa-code me-1"></i> Run In IDE';
+      runInIdeEl.onclick = () =>
+        runInIdeForSolution(
+          solution,
+          path.join(rootPath, solution.solutionPath),
+          path.join(rootPath, solution.startupProject)
+        );
+      runInIdeTd.appendChild(runInIdeEl);
+    }
+
     // Dockerize button column
     const dockerizeTd = document.createElement("td");
     dockerizeTd.classList.add("text-nowrap");
@@ -731,11 +1087,66 @@ function createSolutionsTable(solutions, rootPath) {
       dockerizeTd.appendChild(dockerizeButton);
     }
 
+    // Status lamp column
+    const statusTd = document.createElement("td");
+    statusTd.classList.add("text-nowrap");
+    const lampEl = document.createElement("span");
+    lampEl.classList.add("status-lamp", "status-lamp--grey");
+    const dotEl = document.createElement("span");
+    dotEl.classList.add("status-lamp__dot");
+    dotEl.setAttribute("aria-hidden", "true");
+    const lampLabel = document.createElement("span");
+    lampLabel.classList.add("status-lamp__label");
+    lampLabel.textContent = "Unknown";
+    lampEl.appendChild(dotEl);
+    lampEl.appendChild(lampLabel);
+    statusTd.appendChild(lampEl);
+    tableStatusCells.push(statusTd);
+
+    // Kill button column
+    const killTd = document.createElement("td");
+    killTd.classList.add("text-nowrap");
+    const killBtn = document.createElement("button");
+    killBtn.classList.add("btn", "btn-danger", "btn-sm", "d-none");
+    killBtn.innerHTML = '<i class="fa fa-stop-circle me-1"></i> Kill';
+    killBtn.onclick = () => {
+      const row = statusRows.find((r) => r.checkbox === checkbox);
+      if (!row) {
+        return;
+      }
+      confirmAction(
+        {
+          title: "Kill running service",
+          message: `Stop "${solution.name}"?`,
+          items: [`Port ${row.port}`],
+          confirmLabel: "Kill",
+        },
+        () => killPort(row.port, solution.name)
+      );
+    };
+    killTd.appendChild(killBtn);
+    tableKillCells.push(killTd);
+
     row.appendChild(checkboxTd);
     row.appendChild(getLatestTd);
     row.appendChild(updateDbTd);
     row.appendChild(runInConsoleTd);
+    row.appendChild(runInIdeTd);
     row.appendChild(dockerizeTd);
+    row.appendChild(statusTd);
+    row.appendChild(killTd);
+
+    const statusRow = {
+      name: solution.name,
+      port: resolveMonitoredPort(solution, rootPath),
+      lampEl,
+      killBtn,
+      checkbox,
+      status: "grey",
+      refreshColumnVisibility,
+    };
+    tableRunningFlags.push(statusRow);
+    statusRows.push(statusRow);
 
     tbody.appendChild(row);
   });
@@ -750,6 +1161,12 @@ function createSolutionsTable(solutions, rootPath) {
 function loadSolutionsFromConfig(config) {
   const solutionsContainer = document.getElementById("solutionsContainer");
   solutionsContainer.replaceChildren();
+
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer);
+    statusPollTimer = null;
+  }
+  statusRows = [];
 
   const rootPath = config.rootPath;
 
@@ -816,6 +1233,7 @@ function loadSolutionsFromConfig(config) {
       body.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
         cb.checked = true;
       });
+      updateKillSelectedButtonState();
     });
     toolbar.appendChild(selectSectionBtn);
     body.appendChild(toolbar);
@@ -828,6 +1246,7 @@ function loadSolutionsFromConfig(config) {
   });
 
   solutionsContainer.appendChild(accordion);
+  startStatusPolling();
 }
 
 function dockerizeApp(solution, rootPath) {

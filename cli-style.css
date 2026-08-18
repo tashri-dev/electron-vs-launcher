@@ -682,6 +682,79 @@ html[data-theme="dark"] .app-branch-select:focus {
   font-weight: 600;
 }
 
+/* —— Status lamp —— */
+.status-lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--brand-muted);
+  white-space: nowrap;
+}
+
+.status-lamp__dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #9aa0a6;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  flex-shrink: 0;
+}
+
+.status-lamp--green .status-lamp__dot {
+  background: #2e7d32;
+  box-shadow: 0 0 6px rgba(46, 125, 50, 0.65);
+}
+
+.status-lamp--red .status-lamp__dot {
+  background: #c62828;
+  box-shadow: 0 0 6px rgba(198, 40, 40, 0.5);
+}
+
+.status-lamp--grey .status-lamp__dot {
+  background: #9aa0a6;
+}
+
+/* —— Confirm modal —— */
+.app-confirm-modal .modal-content {
+  border-radius: var(--brand-radius);
+  border: 1px solid var(--brand-line);
+  box-shadow: var(--brand-shadow);
+  background: var(--brand-paper);
+  color: var(--brand-ink);
+}
+
+.app-confirm-modal .modal-header {
+  border-bottom-color: var(--brand-line);
+}
+
+.app-confirm-modal .modal-footer {
+  border-top-color: var(--brand-line);
+}
+
+.app-confirm-message {
+  color: var(--brand-ink);
+}
+
+.app-confirm-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.85rem;
+  color: var(--brand-ink-soft);
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+html[data-theme="dark"] .app-confirm-modal .modal-content {
+  background: #1e1a28;
+  color: #f2eef9;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="dark"] .app-confirm-list {
+  color: var(--brand-ink-soft);
+}
+
 /* —— CLI output (notifications / logs) —— */
 .cli-output {
   background-color: #141018;
