@@ -4,7 +4,7 @@ const { app, BrowserWindow } = require("electron");
 const { initUpdater } = require("./updater");
 const { getVersionInfo } = require("./version");
 
-const ICON_PATH = path.join(__dirname, "build", "icon.png");
+const ICON_PATH = path.join(__dirname, "..", "build", "icon.png");
 const versionInfo = getVersionInfo();
 
 let mainWindow = null;
@@ -22,7 +22,7 @@ function createWindow() {
         }
     });
 
-    mainWindow.loadFile("index.html");
+    mainWindow.loadFile(path.join(__dirname, "index.html"));
     mainWindow.on("closed", () => {
         mainWindow = null;
     });

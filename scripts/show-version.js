@@ -1,4 +1,4 @@
-const { getVersionInfo } = require("../version");
+const { getVersionInfo } = require("../src/version");
 
 const info = getVersionInfo();
 console.log(info.display);

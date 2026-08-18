@@ -1,10 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const pkg = require("./package.json");
+const pkg = require("../package.json");
 
 function loadBuildMeta() {
-  const metaPath = path.join(__dirname, "version-meta.json");
+  const metaPath = path.join(__dirname, "..", "version-meta.json");
   try {
     return JSON.parse(fs.readFileSync(metaPath, "utf8"));
   } catch {

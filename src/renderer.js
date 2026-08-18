@@ -1314,7 +1314,7 @@ function syncConfigPathInput(configPath) {
 }
 
 function loadSolutions() {
-  const defaultConfigPath = path.join(__dirname, "config.json");
+  const defaultConfigPath = path.join(__dirname, "..", "config.json");
   const { ipcRenderer } = require("electron");
 
   return (async () => {
