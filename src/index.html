@@ -37,6 +37,11 @@
               </button>
             </div>
           </div>
+          <button type="button" class="btn btn-sm btn-amwal-outline app-settings-btn" id="openManageSolutionsBtn"
+            data-bs-toggle="modal" data-bs-target="#manageSolutionsModal"
+            aria-label="Manage Solutions" title="Manage Solutions">
+            <i class="fa fa-list" aria-hidden="true"></i>
+          </button>
           <button type="button" class="btn btn-sm btn-amwal-outline app-settings-btn" id="openUserSettingsBtn"
             data-bs-toggle="modal" data-bs-target="#userSettingsModal"
             aria-label="Settings" title="Settings">
@@ -168,6 +173,105 @@
             <button type="button" class="btn btn-sm btn-outline-secondary app-settings-action-secondary" id="resetConfigPathBtn"
               title="Clear saved config path and use bundled default">Use default</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade app-settings-modal" id="manageSolutionsModal" tabindex="-1" aria-labelledby="manageSolutionsModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title fs-5 app-settings-modal-title" id="manageSolutionsModalLabel">Manage Solutions</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="app-settings-hint small mb-2" id="manageSolutionsConfigPath"></p>
+
+          <label class="form-label app-settings-field-label">Existing solutions</label>
+          <div class="table-responsive mb-3" style="max-height: 220px; overflow-y: auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Section</th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="manageSolutionsList"></tbody>
+            </table>
+          </div>
+
+          <hr class="app-settings-divider" />
+
+          <form id="addSolutionForm">
+            <label class="form-label app-settings-field-label">Add a solution</label>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="section" placeholder="Section (e.g. APG)"
+                  list="manageSolutionsSectionList" required />
+                <datalist id="manageSolutionsSectionList"></datalist>
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="name" placeholder="Solution name" required />
+              </div>
+              <div class="col-4">
+                <select class="form-select form-select-sm" name="category">
+                  <option value="dotnet">dotnet</option>
+                  <option value="node">node</option>
+                  <option value="angular">angular</option>
+                </select>
+              </div>
+              <div class="col-8">
+                <input type="text" class="form-control form-control-sm" name="solutionPath" placeholder="Solution path (.sln)" />
+              </div>
+              <div class="col-12">
+                <input type="text" class="form-control form-control-sm" name="startupProject" placeholder="Startup project path" />
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="migratorPath" placeholder="Migrator path (optional)" />
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="contextFolder" placeholder="Docker context folder (optional)" />
+              </div>
+              <div class="col-4">
+                <input type="text" class="form-control form-control-sm" name="dockerPort" placeholder="Docker port" />
+              </div>
+              <div class="col-4">
+                <input type="text" class="form-control form-control-sm" name="imageContainerName" placeholder="Image/container name" />
+              </div>
+              <div class="col-4">
+                <input type="text" class="form-control form-control-sm" name="port" placeholder="Port (node/angular)" />
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="npmScript" placeholder="npm script (default: start)" />
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="aspnetCoreUrls" placeholder="ASPNETCORE_URLS (optional)" />
+              </div>
+            </div>
+            <div class="d-flex justify-content-end">
+              <button type="submit" class="btn btn-sm btn-amwal-primary">
+                <i class="fa fa-plus me-1" aria-hidden="true"></i> Add solution
+              </button>
+            </div>
+          </form>
+
+          <hr class="app-settings-divider" />
+          <details>
+            <summary class="app-settings-field-label" style="cursor: pointer;">Raw config JSON</summary>
+            <pre class="font-monospace small mt-2" id="manageSolutionsJsonView"
+              style="max-height: 200px; overflow: auto; white-space: pre-wrap;"></pre>
+          </details>
+        </div>
+        <div class="modal-footer">
+          <span class="app-settings-hint small me-auto" id="manageSolutionsStatus"></span>
+          <button type="button" class="btn btn-sm btn-outline-secondary app-settings-action-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-sm btn-amwal-primary" id="saveManageSolutionsBtn">
+            <i class="fa fa-save me-1" aria-hidden="true"></i> Save
+          </button>
         </div>
       </div>
     </div>

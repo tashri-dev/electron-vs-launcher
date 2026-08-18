@@ -10,6 +10,10 @@ const LEGACY_ROOT_PATH_STORAGE_KEY = "electron-vs-launcher-root-path";
 let effectiveRootPath = "";
 let activeConfigPath = null;
 
+const DEFAULT_CONFIG_PATH = path.join(__dirname, "..", "config.json");
+let lastLoadedRawConfig = null;
+let lastLoadedConfigFilePath = null;
+
 function getDefaultRootPath() {
   return path.join(os.homedir(), "git-repos", "amwal-pay") + path.sep;
 }
@@ -1314,7 +1318,6 @@ function syncConfigPathInput(configPath) {
 }
 
 function loadSolutions() {
-  const defaultConfigPath = path.join(__dirname, "..", "config.json");
   const { ipcRenderer } = require("electron");
 
   return (async () => {
@@ -1325,7 +1328,7 @@ function loadSolutions() {
         userSettings
       );
 
-      const configPath = migrated?.configPath ? migrated.configPath : defaultConfigPath;
+      const configPath = migrated?.configPath ? migrated.configPath : DEFAULT_CONFIG_PATH;
 
       let data;
       try {
@@ -1349,6 +1352,8 @@ function loadSolutions() {
       );
       activeConfigPath = migrated?.configPath ?? null;
       effectiveRootPath = rootPath;
+      lastLoadedRawConfig = config;
+      lastLoadedConfigFilePath = configPath;
       syncRootPathInput(rootPath);
       syncConfigPathInput(activeConfigPath);
       loadSolutionsFromConfig({ ...config, rootPath });
@@ -1464,6 +1469,159 @@ function loadSolutions() {
       }
     });
   }
+})();
+
+(function initManageSolutionsControls() {
+  const modalEl = document.getElementById("manageSolutionsModal");
+  const listBody = document.getElementById("manageSolutionsList");
+  const jsonView = document.getElementById("manageSolutionsJsonView");
+  const configPathLabel = document.getElementById("manageSolutionsConfigPath");
+  const sectionDatalist = document.getElementById("manageSolutionsSectionList");
+  const addForm = document.getElementById("addSolutionForm");
+  const saveBtn = document.getElementById("saveManageSolutionsBtn");
+  const statusEl = document.getElementById("manageSolutionsStatus");
+  if (!modalEl || !listBody || !addForm || !saveBtn) {
+    return;
+  }
+
+  let workingConfig = null;
+
+  function getSections(config) {
+    if (Array.isArray(config.sections)) {
+      return config.sections;
+    }
+    if (Array.isArray(config.solutions)) {
+      config.sections = [{ title: "Solutions", solutions: config.solutions }];
+      delete config.solutions;
+    } else {
+      config.sections = [];
+    }
+    return config.sections;
+  }
+
+  function render() {
+    const sections = getSections(workingConfig);
+
+    listBody.replaceChildren();
+    sections.forEach((section, sectionIndex) => {
+      (section.solutions || []).forEach((solution, solutionIndex) => {
+        const tr = document.createElement("tr");
+
+        const sectionTd = document.createElement("td");
+        sectionTd.textContent = section.title || "";
+
+        const nameTd = document.createElement("td");
+        nameTd.textContent = solution.name || "";
+
+        const categoryTd = document.createElement("td");
+        categoryTd.textContent = solution.category || "dotnet";
+
+        const actionTd = document.createElement("td");
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.classList.add("btn", "btn-sm", "btn-outline-danger");
+        removeBtn.innerHTML = '<i class="fa fa-trash" aria-hidden="true"></i>';
+        removeBtn.title = "Remove";
+        removeBtn.onclick = () => {
+          section.solutions.splice(solutionIndex, 1);
+          if (section.solutions.length === 0) {
+            sections.splice(sectionIndex, 1);
+          }
+          render();
+        };
+        actionTd.appendChild(removeBtn);
+
+        tr.appendChild(sectionTd);
+        tr.appendChild(nameTd);
+        tr.appendChild(categoryTd);
+        tr.appendChild(actionTd);
+        listBody.appendChild(tr);
+      });
+    });
+
+    sectionDatalist.replaceChildren();
+    sections.forEach((section) => {
+      const opt = document.createElement("option");
+      opt.value = section.title || "";
+      sectionDatalist.appendChild(opt);
+    });
+
+    jsonView.textContent = JSON.stringify(workingConfig, null, 2);
+    statusEl.textContent = "";
+  }
+
+  modalEl.addEventListener("show.bs.modal", () => {
+    workingConfig = JSON.parse(
+      JSON.stringify(lastLoadedRawConfig || { rootPath: "", sections: [] })
+    );
+    const targetPath = lastLoadedConfigFilePath || DEFAULT_CONFIG_PATH;
+    configPathLabel.textContent = `Editing: ${targetPath}`;
+    render();
+  });
+
+  addForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const formData = new FormData(addForm);
+    const sectionTitle = String(formData.get("section") || "").trim();
+    const name = String(formData.get("name") || "").trim();
+    if (!sectionTitle || !name) {
+      statusEl.textContent = "Section and name are required.";
+      return;
+    }
+
+    const solution = {
+      name,
+      category: String(formData.get("category") || "dotnet"),
+    };
+    [
+      "solutionPath",
+      "startupProject",
+      "migratorPath",
+      "contextFolder",
+      "dockerPort",
+      "imageContainerName",
+      "port",
+      "npmScript",
+      "aspnetCoreUrls",
+    ].forEach((field) => {
+      const value = String(formData.get(field) || "").trim();
+      if (value) {
+        solution[field] = value;
+      }
+    });
+
+    const sections = getSections(workingConfig);
+    let section = sections.find((s) => s.title === sectionTitle);
+    if (!section) {
+      section = { title: sectionTitle, solutions: [] };
+      sections.push(section);
+    }
+    section.solutions = section.solutions || [];
+    section.solutions.push(solution);
+
+    addForm.reset();
+    render();
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const targetPath = lastLoadedConfigFilePath || DEFAULT_CONFIG_PATH;
+    try {
+      try {
+        await fs.promises.copyFile(targetPath, `${targetPath}.backup`);
+      } catch {
+        /* no existing file to back up */
+      }
+      await fs.promises.writeFile(
+        targetPath,
+        JSON.stringify(workingConfig, null, 2),
+        "utf-8"
+      );
+      statusEl.textContent = "Saved.";
+      await loadSolutions();
+    } catch (e) {
+      toastError(e, "Could not save configuration");
+    }
+  });
 })();
 
 loadSolutions();
