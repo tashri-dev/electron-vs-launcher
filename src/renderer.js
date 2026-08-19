@@ -369,7 +369,7 @@ function openInVSCode(folderPath) {
 
 // —— Status monitoring (port-based) ——
 
-const STATUS_POLL_INTERVAL_MS = 5000;
+const STATUS_POLL_INTERVAL_MS = 30000;
 let statusRows = [];
 let statusPollTimer = null;
 
@@ -1480,11 +1480,46 @@ function loadSolutions() {
   const addForm = document.getElementById("addSolutionForm");
   const saveBtn = document.getElementById("saveManageSolutionsBtn");
   const statusEl = document.getElementById("manageSolutionsStatus");
+  const formLabel = document.getElementById("addSolutionFormLabel");
+  const submitBtn = document.getElementById("addSolutionSubmitBtn");
+  const cancelEditBtn = document.getElementById("cancelEditSolutionBtn");
   if (!modalEl || !listBody || !addForm || !saveBtn) {
     return;
   }
 
+  const SOLUTION_FIELDS = [
+    "solutionPath",
+    "startupProject",
+    "migratorPath",
+    "contextFolder",
+    "dockerPort",
+    "imageContainerName",
+    "port",
+    "npmScript",
+    "aspnetCoreUrls",
+    "aspnetCoreEnvironment",
+  ];
+
   let workingConfig = null;
+  let editingRef = null; // { sectionIndex, solutionIndex }
+
+  function updateFormModeUI() {
+    if (editingRef) {
+      formLabel.textContent = "Edit solution";
+      submitBtn.innerHTML = '<i class="fa fa-save me-1" aria-hidden="true"></i> Update solution';
+      cancelEditBtn.classList.remove("d-none");
+    } else {
+      formLabel.textContent = "Add a solution";
+      submitBtn.innerHTML = '<i class="fa fa-plus me-1" aria-hidden="true"></i> Add solution';
+      cancelEditBtn.classList.add("d-none");
+    }
+  }
+
+  function exitEditMode() {
+    editingRef = null;
+    addForm.reset();
+    updateFormModeUI();
+  }
 
   function getSections(config) {
     if (Array.isArray(config.sections)) {
@@ -1517,6 +1552,28 @@ function loadSolutions() {
         categoryTd.textContent = solution.category || "dotnet";
 
         const actionTd = document.createElement("td");
+        actionTd.classList.add("text-nowrap");
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.classList.add("btn", "btn-sm", "btn-outline-secondary", "me-1");
+        editBtn.innerHTML = '<i class="fa fa-pencil" aria-hidden="true"></i>';
+        editBtn.title = "Edit";
+        editBtn.onclick = () => {
+          editingRef = { sectionIndex, solutionIndex };
+          addForm.reset();
+          addForm.section.value = section.title || "";
+          addForm.name.value = solution.name || "";
+          addForm.category.value = solution.category || "dotnet";
+          SOLUTION_FIELDS.forEach((field) => {
+            if (addForm[field]) {
+              addForm[field].value = solution[field] || "";
+            }
+          });
+          updateFormModeUI();
+          addForm.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
         removeBtn.classList.add("btn", "btn-sm", "btn-outline-danger");
@@ -1527,8 +1584,12 @@ function loadSolutions() {
           if (section.solutions.length === 0) {
             sections.splice(sectionIndex, 1);
           }
+          if (editingRef) {
+            exitEditMode();
+          }
           render();
         };
+        actionTd.appendChild(editBtn);
         actionTd.appendChild(removeBtn);
 
         tr.appendChild(sectionTd);
@@ -1556,7 +1617,14 @@ function loadSolutions() {
     );
     const targetPath = lastLoadedConfigFilePath || DEFAULT_CONFIG_PATH;
     configPathLabel.textContent = `Editing: ${targetPath}`;
+    editingRef = null;
+    addForm.reset();
+    updateFormModeUI();
     render();
+  });
+
+  cancelEditBtn?.addEventListener("click", () => {
+    exitEditMode();
   });
 
   addForm.addEventListener("submit", (e) => {
@@ -1573,17 +1641,7 @@ function loadSolutions() {
       name,
       category: String(formData.get("category") || "dotnet"),
     };
-    [
-      "solutionPath",
-      "startupProject",
-      "migratorPath",
-      "contextFolder",
-      "dockerPort",
-      "imageContainerName",
-      "port",
-      "npmScript",
-      "aspnetCoreUrls",
-    ].forEach((field) => {
+    SOLUTION_FIELDS.forEach((field) => {
       const value = String(formData.get(field) || "").trim();
       if (value) {
         solution[field] = value;
@@ -1591,15 +1649,43 @@ function loadSolutions() {
     });
 
     const sections = getSections(workingConfig);
-    let section = sections.find((s) => s.title === sectionTitle);
-    if (!section) {
-      section = { title: sectionTitle, solutions: [] };
-      sections.push(section);
+
+    if (editingRef) {
+      const { sectionIndex, solutionIndex } = editingRef;
+      const oldSection = sections[sectionIndex];
+      const editingSameSection = oldSection && oldSection.title === sectionTitle;
+      editingRef = null;
+
+      if (editingSameSection) {
+        // Replace in place so the solution keeps its original position.
+        oldSection.solutions.splice(solutionIndex, 1, solution);
+      } else {
+        if (oldSection?.solutions) {
+          oldSection.solutions.splice(solutionIndex, 1);
+          if (oldSection.solutions.length === 0) {
+            sections.splice(sectionIndex, 1);
+          }
+        }
+        let section = sections.find((s) => s.title === sectionTitle);
+        if (!section) {
+          section = { title: sectionTitle, solutions: [] };
+          sections.push(section);
+        }
+        section.solutions = section.solutions || [];
+        section.solutions.push(solution);
+      }
+    } else {
+      let section = sections.find((s) => s.title === sectionTitle);
+      if (!section) {
+        section = { title: sectionTitle, solutions: [] };
+        sections.push(section);
+      }
+      section.solutions = section.solutions || [];
+      section.solutions.push(solution);
     }
-    section.solutions = section.solutions || [];
-    section.solutions.push(solution);
 
     addForm.reset();
+    updateFormModeUI();
     render();
   });
 

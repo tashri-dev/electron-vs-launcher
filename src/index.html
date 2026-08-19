@@ -207,7 +207,7 @@
           <hr class="app-settings-divider" />
 
           <form id="addSolutionForm">
-            <label class="form-label app-settings-field-label">Add a solution</label>
+            <label class="form-label app-settings-field-label" id="addSolutionFormLabel">Add a solution</label>
             <div class="row g-2 mb-2">
               <div class="col-6">
                 <input type="text" class="form-control form-control-sm" name="section" placeholder="Section (e.g. APG)"
@@ -251,9 +251,13 @@
               <div class="col-6">
                 <input type="text" class="form-control form-control-sm" name="aspnetCoreUrls" placeholder="ASPNETCORE_URLS (optional)" />
               </div>
+              <div class="col-6">
+                <input type="text" class="form-control form-control-sm" name="aspnetCoreEnvironment" placeholder="ASPNETCORE_ENVIRONMENT (optional)" />
+              </div>
             </div>
-            <div class="d-flex justify-content-end">
-              <button type="submit" class="btn btn-sm btn-amwal-primary">
+            <div class="d-flex justify-content-end gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="cancelEditSolutionBtn">Cancel edit</button>
+              <button type="submit" class="btn btn-sm btn-amwal-primary" id="addSolutionSubmitBtn">
                 <i class="fa fa-plus me-1" aria-hidden="true"></i> Add solution
               </button>
             </div>
