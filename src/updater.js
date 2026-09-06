@@ -108,6 +108,8 @@ function registerIpcHandlers() {
     userSettings.getUserSettingsForRenderer()
   );
 
+  ipcMain.handle("app:get-user-data-path", () => app.getPath("userData"));
+
   ipcMain.handle("app:set-user-settings", (_event, patch) => {
     if (patch && Object.prototype.hasOwnProperty.call(patch, "rootPath")) {
       userSettings.setRootPathOverride(patch.rootPath);

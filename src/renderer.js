@@ -12,6 +12,7 @@ const GIT_FETCH_CONCURRENCY = 4;
 const GIT_CHECKOUT_CONCURRENCY = 4;
 const SWITCHABLE_BRANCHES = ["master_dev", "master_sit", "master_uat", "master_oci"];
 const SWITCHABLE_BRANCH_SET = new Set(SWITCHABLE_BRANCHES);
+const CUSTOM_BRANCH_OPTION_VALUE = "__custom__";
 
 /** @type {Map<string, Set<HTMLSelectElement>>} */
 const branchSelectsByRepo = new Map();
@@ -222,8 +223,14 @@ function fillBranchSelect(select, branches, current) {
     }
     select.appendChild(option);
   }
+
+  const customOption = document.createElement("option");
+  customOption.value = CUSTOM_BRANCH_OPTION_VALUE;
+  customOption.textContent = "Custom branch…";
+  select.appendChild(customOption);
+
   select._currentBranch = current || "";
-  select.disabled = branches.length === 0;
+  select.disabled = false;
   select.title = current ? `Current branch: ${current}` : "Switch git branch";
 }
 
@@ -441,12 +448,55 @@ async function onBranchSelectChange(select, repoDir, name) {
 
 function createBranchCell(solution, rootPath) {
   const td = document.createElement("td");
+  td.classList.add("app-branch-cell");
+
   const select = document.createElement("select");
   select.classList.add("form-select", "form-select-sm", "app-branch-select");
   select.setAttribute("aria-label", `Git branch for ${solution.name}`);
   select.title = "Switch git branch";
   setBranchSelectPlaceholder(select, "Loading…");
   td.appendChild(select);
+
+  const customWrap = document.createElement("div");
+  customWrap.classList.add("app-custom-branch", "d-none", "d-flex", "align-items-center", "gap-1");
+
+  const customInput = document.createElement("input");
+  customInput.type = "text";
+  customInput.classList.add("form-control", "form-control-sm", "app-custom-branch-input");
+  customInput.placeholder = "Branch name";
+  customInput.setAttribute("aria-label", `Custom git branch for ${solution.name}`);
+  customWrap.appendChild(customInput);
+
+  const createLabel = document.createElement("label");
+  createLabel.classList.add("form-check", "form-check-inline", "small", "text-nowrap", "mb-0", "app-custom-branch-create-label");
+  const createCheckbox = document.createElement("input");
+  createCheckbox.type = "checkbox";
+  createCheckbox.classList.add("form-check-input");
+  createCheckbox.title = "Create the branch if it doesn't already exist (git checkout -b)";
+  createLabel.appendChild(createCheckbox);
+  createLabel.appendChild(document.createTextNode(" Create if not exist"));
+  customWrap.appendChild(createLabel);
+
+  td.appendChild(customWrap);
+
+  const cancelCustomBranch = () => {
+    customInput.value = "";
+    createCheckbox.checked = false;
+    customWrap.classList.add("d-none");
+    select.classList.remove("d-none");
+    select.value = select._currentBranch || "";
+  };
+
+  customInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      cancelCustomBranch();
+    }
+  });
+  customInput.addEventListener("blur", () => {
+    if (!customInput.value.trim()) {
+      cancelCustomBranch();
+    }
+  });
 
   const target = resolveGetLatestTarget(solution.solutionPath, rootPath);
   if (target.error) {
@@ -462,10 +512,61 @@ function createBranchCell(solution, rootPath) {
   select.dataset.solutionName = solution.name;
   registerBranchSelect(target.repoDir, select);
   select.addEventListener("change", () => {
+    if (select.value === CUSTOM_BRANCH_OPTION_VALUE) {
+      select.classList.add("d-none");
+      customWrap.classList.remove("d-none");
+      customInput.focus();
+      return;
+    }
     onBranchSelectChange(select, target.repoDir, solution.name);
+  });
+  customInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    onCustomBranchSubmit(select, customInput, createCheckbox, customWrap, target.repoDir, solution.name);
   });
   loadBranchesIntoSelect(select, target.repoDir);
   return td;
+}
+
+async function onCustomBranchSubmit(select, input, createCheckbox, customWrap, repoDir, name) {
+  const branch = input.value.trim();
+  if (!branch) {
+    return;
+  }
+  if (!repoDir) {
+    showToast(`Could not switch branch (${name}): repository not found`, "error");
+    return;
+  }
+
+  const prev = select._currentBranch || "";
+  const createIfMissing = createCheckbox.checked;
+  input.disabled = true;
+  createCheckbox.disabled = true;
+  try {
+    await gitExec(repoDir, ["checkout", ...(createIfMissing ? ["-b"] : []), branch]);
+    showToast(`Switched ${name} to ${branch}`, "success");
+    input.value = "";
+    createCheckbox.checked = false;
+    customWrap.classList.add("d-none");
+    select.classList.remove("d-none");
+    await Promise.all(
+      [...(branchSelectsByRepo.get(repoDir) || [])].map((el) =>
+        loadBranchesIntoSelect(el, repoDir)
+      )
+    );
+  } catch (err) {
+    showToast(
+      `Could not switch branch (${name}):\n${formatErrorReason(err)}`,
+      "error"
+    );
+    select.value = prev;
+  } finally {
+    input.disabled = false;
+    createCheckbox.disabled = false;
+  }
 }
 
 function resolveGetLatestTarget(solutionPath, rootPath) {
@@ -2273,8 +2374,19 @@ function loadSolutions() {
   });
 
   saveBtn.addEventListener("click", async () => {
-    const targetPath = lastLoadedConfigFilePath || DEFAULT_CONFIG_PATH;
+    const { ipcRenderer } = require("electron");
+    let targetPath = lastLoadedConfigFilePath || DEFAULT_CONFIG_PATH;
     try {
+      // The bundled config.json lives inside the packaged app (app.asar in
+      // production), which is read-only. If no custom override is active,
+      // redirect the save to a writable file in app data and remember it
+      // as the active config path going forward.
+      if (targetPath === DEFAULT_CONFIG_PATH) {
+        const userDataPath = await ipcRenderer.invoke("app:get-user-data-path");
+        targetPath = path.join(userDataPath, "config.json");
+        await ipcRenderer.invoke("app:set-user-settings", { configPath: targetPath });
+      }
+
       try {
         await fs.promises.copyFile(targetPath, `${targetPath}.backup`);
       } catch {

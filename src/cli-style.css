@@ -472,6 +472,24 @@ html[data-theme="dark"] .app-branch-select:focus {
   color: #fff;
 }
 
+.app-branch-cell {
+  min-width: 12rem;
+}
+
+.app-custom-branch {
+  flex-wrap: nowrap;
+}
+
+.app-custom-branch-input {
+  min-width: 8rem;
+  font-size: 0.875rem;
+}
+
+.app-custom-branch-create-label {
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
 .app-toolbar__divider {
   width: 1px;
   align-self: stretch;
