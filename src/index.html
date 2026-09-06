@@ -70,6 +70,17 @@
           </div>
         </div>
         <div class="app-toolbar__divider" role="presentation"></div>
+        <div class="app-toolbar__group">
+          <span class="app-toolbar__label">Branch</span>
+          <div class="app-toolbar__buttons">
+            <select id="globalBranchSelect" class="form-select form-select-sm app-branch-select app-global-branch-select"
+              aria-label="Switch all repositories to a branch"
+              title="Switch every repository to this branch" disabled>
+              <option value="">Loading…</option>
+            </select>
+          </div>
+        </div>
+        <div class="app-toolbar__divider" role="presentation"></div>
         <div class="app-toolbar__group app-toolbar__group--grow">
           <span class="app-toolbar__label">Run &amp; sync</span>
           <div class="app-toolbar__buttons">
@@ -79,17 +90,17 @@
             <button type="button" class="btn btn-amwal-cta" id="launchBtnForIDE">
               <i class="fa fa-code me-1"></i> Run in IDE
             </button>
-            <div class="d-flex align-items-center gap-2">
-              <select id="branchSelect" class="form-select form-select-sm app-branch-select" title="Branch to pull">
-                <option value="master_dev" selected>DEV</option>
-                <option value="master_sit">SIT</option>
-                <option value="master_uat">UAT</option>
-                <option value="master_oci">OCI</option>
-              </select>
-              <button type="button" class="btn btn-amwal-cta" id="get-latest-selected">
-                <i class="fa fa-download me-1"></i> Get latest
-              </button>
-            </div>
+            <button type="button" class="btn btn-amwal-cta" id="openInCursorBtn"
+              title="Open selected repositories in a Cursor workspace">
+              <i class="fa fa-folder-open me-1"></i> Open in Cursor
+            </button>
+            <button type="button" class="btn btn-amwal-cta" id="fetchAllBtn"
+              title="Fetch remotes for every repository">
+              <i class="fa fa-cloud-download me-1"></i> Fetch all
+            </button>
+            <button type="button" class="btn btn-amwal-cta" id="get-latest-selected">
+              <i class="fa fa-download me-1"></i> Get latest
+            </button>
           </div>
         </div>
         <div class="app-toolbar__divider" role="presentation"></div>
