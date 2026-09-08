@@ -1189,7 +1189,8 @@ function launchSelectedSolutionsOnCLI() {
         checkbox._category,
         checkbox._npmScript,
         checkbox._aspnetCoreEnvironment,
-        checkbox._aspnetCoreUrls
+        checkbox._aspnetCoreUrls,
+        checkbox.id
       );
     });
 }
@@ -1538,12 +1539,29 @@ function updateDb(migratorRelativePath) {
 
 
 
+function runInNewTerminalTab(command, title) {
+  const escapedCommand = command.replace(/(["\\$`])/g, '\\$1');
+  const osaScript = [
+    'tell application "Terminal"',
+    `set newTab to do script "${escapedCommand}"`,
+    title ? `set custom title of newTab to "${title.replace(/(["\\])/g, '\\$1')}"` : "",
+    'activate',
+    'end tell'
+  ].filter(Boolean).join('\n');
+
+  spawn('osascript', ['-e', osaScript], {
+    detached: true,
+    stdio: "ignore"
+  }).unref();
+}
+
 function launchOnCLI(
   startupProject,
   category,
   npmScript,
   aspnetCoreEnvironment,
-  aspnetCoreUrls
+  aspnetCoreUrls,
+  sessionName
 ) {
   try {
     const startupProjectPath = path.resolve(startupProject);
@@ -1556,17 +1574,7 @@ function launchOnCLI(
       }
       const script = npmScript || "start";
       const command = `cd "${startupProjectPath}" && npm run ${script}; echo; echo 'Press any key to exit...'; read -n 1`;
-      const osaScript = [
-        'tell application "Terminal"',
-        `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
-        'activate',
-        'end tell'
-      ].join('\n');
-
-      spawn('osascript', ['-e', osaScript], {
-        detached: true,
-        stdio: "ignore"
-      }).unref();
+      runInNewTerminalTab(command, sessionName);
       return;
     }
 
@@ -1589,18 +1597,10 @@ function launchOnCLI(
       envExports += `export ASPNETCORE_URLS="${aspnetCoreUrls}"; `;
     }
 
+    const projectDir = path.dirname(startupProjectPath);
     const noLaunchProfile = aspnetCoreEnvironment ? "--no-launch-profile " : "";
-    const command = `${envExports}"${dotnetPath}" run ${noLaunchProfile}--project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;    const osaScript = [
-      'tell application "Terminal"',
-      `do script "${command.replace(/(["\\$`])/g, '\\$1')}"`,
-      'activate',
-      'end tell'
-    ].join('\n');
-
-    spawn('osascript', ['-e', osaScript], {
-      detached: true,
-      stdio: "ignore"
-    }).unref();
+    const command = `cd "${projectDir}" && ${envExports}"${dotnetPath}" run ${noLaunchProfile}--project "${startupProjectPath}"; echo; echo 'Press any key to exit...'; read -n 1`;
+    runInNewTerminalTab(command, sessionName);
   } catch (e) {
     toastError(e, "Run in CLI");
   }
@@ -1739,7 +1739,8 @@ function createSolutionsTable(solutions, rootPath) {
           solution.category,
           solution.npmScript,
           solution.aspnetCoreEnvironment,
-          solution.aspnetCoreUrls
+          solution.aspnetCoreUrls,
+          solution.name.replace(/\s/g, "")
         );
       runInConsoleTd.appendChild(runInConsoleEl);
     }
