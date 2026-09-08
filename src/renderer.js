@@ -1540,14 +1540,22 @@ function updateDb(migratorRelativePath) {
 
 
 function runInNewTerminalTab(command, title) {
-  const escapedCommand = command.replace(/(["\\$`])/g, '\\$1');
+  // Set the tab title as the first thing the shell itself runs (via the
+  // OSC "set title" escape), rather than via `set custom title of ...`
+  // after the fact: a shell prompt theme's own preexec/precmd hook (e.g.
+  // Powerlevel10k, Starship) fires as soon as the command starts and
+  // otherwise races with — and often clobbers — the AppleScript-set title.
+  const titlePrefix = title
+    ? `printf '\\033]0;%s\\007' "${title.replace(/(["\\$`])/g, '\\$1')}"; `
+    : "";
+  const fullCommand = `${titlePrefix}${command}`;
+  const escapedCommand = fullCommand.replace(/(["\\$`])/g, '\\$1');
   const osaScript = [
     'tell application "Terminal"',
-    `set newTab to do script "${escapedCommand}"`,
-    title ? `set custom title of newTab to "${title.replace(/(["\\])/g, '\\$1')}"` : "",
+    `do script "${escapedCommand}"`,
     'activate',
     'end tell'
-  ].filter(Boolean).join('\n');
+  ].join('\n');
 
   spawn('osascript', ['-e', osaScript], {
     detached: true,
