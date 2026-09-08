@@ -498,6 +498,10 @@ function createBranchCell(solution, rootPath) {
     }
   });
 
+  select._customInput = customInput;
+  select._customWrap = customWrap;
+  select._customCreateCheckbox = createCheckbox;
+
   const target = resolveGetLatestTarget(solution.solutionPath, rootPath);
   if (target.error) {
     setBranchSelectPlaceholder(select, "Unavailable");
@@ -1439,17 +1443,61 @@ function getSelectedBranchForRepo(repoDir) {
   return "";
 }
 
+/**
+ * A branch typed into a solution's "Custom branch…" input but not yet
+ * submitted (Enter not pressed) for the given repo, if any.
+ */
+function getPendingCustomBranchForRepo(repoDir) {
+  const selects = branchSelectsByRepo.get(repoDir);
+  if (!selects) {
+    return null;
+  }
+  for (const select of selects) {
+    if (!select._customWrap || select._customWrap.classList.contains("d-none")) {
+      continue;
+    }
+    const branch = (select._customInput?.value || "").trim();
+    if (branch) {
+      return { branch, create: !!select._customCreateCheckbox?.checked };
+    }
+  }
+  return null;
+}
+
+function resetCustomBranchUiForRepo(repoDir) {
+  const selects = branchSelectsByRepo.get(repoDir);
+  if (!selects) {
+    return;
+  }
+  for (const select of selects) {
+    if (select._customInput) {
+      select._customInput.value = "";
+    }
+    if (select._customCreateCheckbox) {
+      select._customCreateCheckbox.checked = false;
+    }
+    if (select._customWrap) {
+      select._customWrap.classList.add("d-none");
+    }
+    select.classList.remove("d-none");
+  }
+}
+
 async function resolveBranchForGetLatest(repoDir) {
+  const pending = getPendingCustomBranchForRepo(repoDir);
+  if (pending) {
+    return pending;
+  }
   const selected = String(getSelectedBranchForRepo(repoDir) || "").trim();
   if (selected) {
-    return selected;
+    return { branch: selected, create: false };
   }
   const { stdout } = await gitExec(repoDir, ["rev-parse", "--abbrev-ref", "HEAD"]);
   const current = stdout.trim();
   if (!current || current === "HEAD") {
     throw new Error("Could not determine the selected branch");
   }
-  return current;
+  return { branch: current, create: false };
 }
 
 function getLatest(solutionPath, rootPath) {
@@ -1474,8 +1522,8 @@ async function runGetLatest(repoDir, name) {
   getLatestInFlight.add(repoDir);
 
   try {
-    const branch = await resolveBranchForGetLatest(repoDir);
-    await gitExec(repoDir, ["checkout", branch]);
+    const { branch, create } = await resolveBranchForGetLatest(repoDir);
+    await gitExec(repoDir, ["checkout", ...(create ? ["-b"] : []), branch]);
     const { stdout, stderr } = await gitExec(repoDir, ["pull"], {
       timeout: GIT_FETCH_TIMEOUT_MS,
     });
@@ -1486,6 +1534,7 @@ async function runGetLatest(repoDir, name) {
         : `Get latest succeeded: ${name} (${branch})`,
       "success"
     );
+    resetCustomBranchUiForRepo(repoDir);
     refreshBranchSelectsForRepo(repoDir);
   } catch (err) {
     showToast(
