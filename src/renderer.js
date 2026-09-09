@@ -1159,7 +1159,7 @@ document.getElementById("killSelectedBtn")?.addEventListener("click", () => {
 function launchSelectedSolutions() {
   const dotnetCheckboxes = [];
   document
-    .querySelectorAll('input[type="checkbox"]:checked')
+    .querySelectorAll('input.app-solution-checkbox[type="checkbox"]:checked')
     .forEach((checkbox) => {
       const cat = checkbox._category || "dotnet";
       if (cat === "node" || cat === "angular" || cat === "angualr") {
@@ -1186,7 +1186,7 @@ function launchSelectedSolutions() {
 // Launch selected checkboxes
 function launchSelectedSolutionsOnCLI() {
   document
-    .querySelectorAll('input[type="checkbox"]:checked')
+    .querySelectorAll('input.app-solution-checkbox[type="checkbox"]:checked')
     .forEach((checkbox) => {
       launchOnCLI(
         checkbox.data,
@@ -1207,8 +1207,8 @@ function launchSelectedSolutionsSafely() {
 function collectUniqueRepoTargets({ selectedOnly = false } = {}) {
   const seen = new Map();
   const selector = selectedOnly
-    ? '#solutionsContainer input[type="checkbox"]:checked'
-    : '#solutionsContainer input[type="checkbox"]';
+    ? '#solutionsContainer input.app-solution-checkbox[type="checkbox"]:checked'
+    : '#solutionsContainer input.app-solution-checkbox[type="checkbox"]';
   document.querySelectorAll(selector).forEach((checkbox) => {
     const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
     if (target.error || seen.has(target.repoDir)) {
@@ -1382,7 +1382,7 @@ function getLatestFromSelected() {
   const seenRepoDirs = new Set();
 
   document
-    .querySelectorAll('input[type="checkbox"]:checked')
+    .querySelectorAll('input.app-solution-checkbox[type="checkbox"]:checked')
     .forEach((checkbox) => {
       const target = resolveGetLatestTarget(checkbox.value, effectiveRootPath);
       if (target.error) {
@@ -1411,14 +1411,14 @@ function warmUpRider() {
 }
 
 function clearSelections() {
-  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+  const checkboxes = document.querySelectorAll('input.app-solution-checkbox[type="checkbox"]');
   checkboxes.forEach((checkbox) => {
     checkbox.checked = false;
   });
   updateKillSelectedButtonState();
 }
 function selectAllCheckboxes() {
-  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+  const checkboxes = document.querySelectorAll('input.app-solution-checkbox[type="checkbox"]');
   checkboxes.forEach((checkbox) => {
     checkbox.checked = true;
   });
@@ -1742,7 +1742,7 @@ function createSolutionsTable(solutions, rootPath) {
     const checkboxTd = document.createElement("td");
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
-    checkbox.classList.add("form-check-input");
+    checkbox.classList.add("form-check-input", "app-solution-checkbox");
     checkbox.id = solution.name.replace(/\s/g, "");
     checkbox.value = path.join(rootPath, solution.solutionPath);
     checkbox.data = path.join(rootPath, solution.startupProject);
@@ -1976,7 +1976,7 @@ function loadSolutionsFromConfig(config) {
     selectSectionBtn.innerHTML =
       '<i class="fa fa-check-square-o me-1"></i> Select all in section';
     selectSectionBtn.addEventListener("click", () => {
-      body.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      body.querySelectorAll('input.app-solution-checkbox[type="checkbox"]').forEach((cb) => {
         cb.checked = true;
       });
       updateKillSelectedButtonState();
