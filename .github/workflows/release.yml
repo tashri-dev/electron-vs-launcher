@@ -15,7 +15,7 @@ name: Release
 on:
   push:
     branches:
-      - mac-version
+      - release
   workflow_dispatch:
 
 permissions:
