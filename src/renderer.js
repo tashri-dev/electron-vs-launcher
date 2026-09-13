@@ -321,11 +321,16 @@ function fillGlobalBranchSelect(select, branches, current, repoCount, counts) {
     select.appendChild(option);
   }
 
+  const customOption = document.createElement("option");
+  customOption.value = CUSTOM_BRANCH_OPTION_VALUE;
+  customOption.textContent = "Custom branch (selected)…";
+  select.appendChild(customOption);
+
   if (!current) {
     placeholder.selected = true;
   }
 
-  select.disabled = branches.length === 0;
+  select.disabled = repoCount === 0;
   select._currentBranch = current || "";
   select.title = current
     ? `All repositories on ${current}`
@@ -340,6 +345,12 @@ async function onGlobalBranchChange() {
 
   const branch = select.value;
   const prev = select._currentBranch || "";
+
+  if (branch === CUSTOM_BRANCH_OPTION_VALUE) {
+    showGlobalCustomBranchInput();
+    return;
+  }
+
   if (!branch || branch === prev || !SWITCHABLE_BRANCH_SET.has(branch)) {
     if (!branch || !SWITCHABLE_BRANCH_SET.has(branch)) {
       refreshGlobalBranchSelect();
@@ -406,6 +417,110 @@ async function onGlobalBranchChange() {
     failures.length > 8 ? `\n…and ${failures.length - 8} more` : "";
   showToast(
     `Switched ${succeeded} of ${targets.length} repos to ${branch}\n${detail}${extra}`,
+    succeeded > 0 ? "info" : "error"
+  );
+}
+
+function showGlobalCustomBranchInput() {
+  const select = document.getElementById("globalBranchSelect");
+  const wrap = document.getElementById("globalCustomBranchWrap");
+  const input = document.getElementById("globalCustomBranchInput");
+  if (!select || !wrap || !input) {
+    return;
+  }
+  select.classList.add("d-none");
+  wrap.classList.remove("d-none");
+  input.focus();
+}
+
+function cancelGlobalCustomBranch() {
+  const select = document.getElementById("globalBranchSelect");
+  const wrap = document.getElementById("globalCustomBranchWrap");
+  const input = document.getElementById("globalCustomBranchInput");
+  const createCheckbox = document.getElementById("globalCustomBranchCreate");
+  if (input) {
+    input.value = "";
+  }
+  if (createCheckbox) {
+    createCheckbox.checked = false;
+  }
+  if (wrap) {
+    wrap.classList.add("d-none");
+  }
+  if (select) {
+    select.classList.remove("d-none");
+    select.value = select._currentBranch || "";
+  }
+}
+
+async function onGlobalCustomBranchSubmit() {
+  const input = document.getElementById("globalCustomBranchInput");
+  const createCheckbox = document.getElementById("globalCustomBranchCreate");
+  if (!input) {
+    return;
+  }
+  const branch = input.value.trim();
+  if (!branch) {
+    return;
+  }
+
+  const targets = collectUniqueRepoTargets({ selectedOnly: true });
+  if (targets.length === 0) {
+    showToast("Select at least one solution to switch to a custom branch", "info");
+    return;
+  }
+
+  const createIfMissing = !!createCheckbox?.checked;
+  input.disabled = true;
+  if (createCheckbox) {
+    createCheckbox.disabled = true;
+  }
+  showToast(
+    `Switching ${targets.length} selected ${targets.length === 1 ? "repo" : "repos"} to ${branch}…`,
+    "info"
+  );
+
+  const failures = [];
+  let succeeded = 0;
+
+  try {
+    await runWithConcurrency(targets, GIT_CHECKOUT_CONCURRENCY, async ({ repoDir, name }) => {
+      try {
+        await gitExec(repoDir, ["checkout", ...(createIfMissing ? ["-b"] : []), branch]);
+        succeeded += 1;
+        await Promise.all(
+          [...(branchSelectsByRepo.get(repoDir) || [])].map((el) =>
+            loadBranchesIntoSelect(el, repoDir)
+          )
+        );
+      } catch (err) {
+        failures.push({ name, error: formatErrorReason(err) });
+      }
+    });
+  } finally {
+    input.disabled = false;
+    if (createCheckbox) {
+      createCheckbox.disabled = false;
+    }
+    cancelGlobalCustomBranch();
+    refreshGlobalBranchSelect();
+  }
+
+  if (failures.length === 0) {
+    showToast(
+      `Switched ${succeeded} selected ${succeeded === 1 ? "repo" : "repos"} to ${branch}`,
+      "success"
+    );
+    return;
+  }
+
+  const detail = failures
+    .slice(0, 8)
+    .map((item) => `${item.name}: ${item.error}`)
+    .join("\n");
+  const extra = failures.length > 8 ? `\n…and ${failures.length - 8} more` : "";
+  showToast(
+    `Switched ${succeeded} of ${targets.length} selected repos to ${branch}\n${detail}${extra}`,
     succeeded > 0 ? "info" : "error"
   );
 }
@@ -781,6 +896,26 @@ document.getElementById("fetchAllBtn").addEventListener("click", fetchAllRepos);
 document
   .getElementById("globalBranchSelect")
   .addEventListener("change", onGlobalBranchChange);
+
+(function initGlobalCustomBranchInput() {
+  const input = document.getElementById("globalCustomBranchInput");
+  if (!input) {
+    return;
+  }
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      onGlobalCustomBranchSubmit();
+    } else if (event.key === "Escape") {
+      cancelGlobalCustomBranch();
+    }
+  });
+  input.addEventListener("blur", () => {
+    if (!input.value.trim()) {
+      cancelGlobalCustomBranch();
+    }
+  });
+})();
 
 const riderPath = `${os.homedir()}/Applications/Rider.app/Contents/MacOS/rider`;
 
@@ -1380,6 +1515,7 @@ async function fetchAllRepos() {
 
 function getLatestFromSelected() {
   const seenRepoDirs = new Set();
+  const globalOverride = getPendingGlobalCustomBranch();
 
   document
     .querySelectorAll('input.app-solution-checkbox[type="checkbox"]:checked')
@@ -1397,8 +1533,12 @@ function getLatestFromSelected() {
         return;
       }
       seenRepoDirs.add(target.repoDir);
-      runGetLatest(target.repoDir, target.name);
+      runGetLatest(target.repoDir, target.name, globalOverride);
     });
+
+  if (globalOverride) {
+    cancelGlobalCustomBranch();
+  }
 }
 
 
@@ -1483,7 +1623,28 @@ function resetCustomBranchUiForRepo(repoDir) {
   }
 }
 
-async function resolveBranchForGetLatest(repoDir) {
+/**
+ * A branch typed into the global "Custom branch (selected)…" input but not
+ * yet submitted (Enter not pressed), if any.
+ */
+function getPendingGlobalCustomBranch() {
+  const wrap = document.getElementById("globalCustomBranchWrap");
+  const input = document.getElementById("globalCustomBranchInput");
+  if (!wrap || wrap.classList.contains("d-none") || !input) {
+    return null;
+  }
+  const branch = input.value.trim();
+  if (!branch) {
+    return null;
+  }
+  const createCheckbox = document.getElementById("globalCustomBranchCreate");
+  return { branch, create: !!createCheckbox?.checked };
+}
+
+async function resolveBranchForGetLatest(repoDir, override) {
+  if (override) {
+    return override;
+  }
   const pending = getPendingCustomBranchForRepo(repoDir);
   if (pending) {
     return pending;
@@ -1513,7 +1674,7 @@ function getLatest(solutionPath, rootPath) {
   runGetLatest(target.repoDir, target.name);
 }
 
-async function runGetLatest(repoDir, name) {
+async function runGetLatest(repoDir, name, override) {
   if (getLatestInFlight.has(repoDir)) {
     showToast(`Get latest already running for ${name}`, "info");
     return;
@@ -1522,7 +1683,7 @@ async function runGetLatest(repoDir, name) {
   getLatestInFlight.add(repoDir);
 
   try {
-    const { branch, create } = await resolveBranchForGetLatest(repoDir);
+    const { branch, create } = await resolveBranchForGetLatest(repoDir, override);
     await gitExec(repoDir, ["checkout", ...(create ? ["-b"] : []), branch]);
     const { stdout, stderr } = await gitExec(repoDir, ["pull"], {
       timeout: GIT_FETCH_TIMEOUT_MS,

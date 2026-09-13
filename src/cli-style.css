@@ -559,6 +559,53 @@ html[data-theme="dark"] .app-branch-select:focus {
   filter: brightness(0.95);
 }
 
+.btn-amwal-ghost {
+  --bs-btn-color: var(--brand-purple-deep);
+  background: rgba(172, 44, 237, 0.08);
+  border: 1px solid rgba(172, 44, 237, 0.28);
+  color: var(--brand-purple-deep);
+}
+
+.btn-amwal-ghost:hover {
+  background: rgba(172, 44, 237, 0.16);
+  border-color: var(--brand-purple);
+  color: var(--brand-purple-deep);
+}
+
+.btn-amwal-ghost:active {
+  filter: brightness(0.95);
+}
+
+html[data-theme="dark"] .btn-amwal-ghost {
+  background: rgba(196, 113, 247, 0.1);
+  border-color: rgba(196, 113, 247, 0.32);
+  color: var(--brand-purple-soft);
+}
+
+html[data-theme="dark"] .btn-amwal-ghost:hover {
+  background: rgba(196, 113, 247, 0.2);
+  border-color: var(--brand-purple-soft);
+  color: #fff;
+}
+
+.btn-amwal-sync {
+  --bs-btn-color: #fff;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  border: none;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(13, 148, 136, 0.32);
+}
+
+.btn-amwal-sync:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.4);
+  color: #fff;
+}
+
+.btn-amwal-sync:active {
+  filter: brightness(0.95);
+}
+
 /* —— Solutions panel —— */
 .app-toolbar {
   margin-bottom: 1rem;

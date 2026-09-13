@@ -78,6 +78,16 @@
               title="Switch every repository to this branch" disabled>
               <option value="">Loading…</option>
             </select>
+            <div id="globalCustomBranchWrap" class="app-custom-branch d-none d-flex align-items-center gap-1">
+              <input type="text" id="globalCustomBranchInput"
+                class="form-control form-control-sm app-custom-branch-input" placeholder="Branch name"
+                aria-label="Custom git branch for selected solutions" />
+              <label class="form-check form-check-inline small text-nowrap mb-0 app-custom-branch-create-label">
+                <input type="checkbox" id="globalCustomBranchCreate" class="form-check-input"
+                  title="Create the branch if it doesn't already exist (git checkout -b)" />
+                Create if not exist
+              </label>
+            </div>
           </div>
         </div>
         <div class="app-toolbar__divider" role="presentation"></div>
@@ -90,15 +100,15 @@
             <button type="button" class="btn btn-amwal-cta" id="launchBtnForIDE">
               <i class="fa fa-code me-1"></i> Run in IDE
             </button>
-            <button type="button" class="btn btn-amwal-cta" id="openInCursorBtn"
+            <button type="button" class="btn btn-amwal-ghost" id="openInCursorBtn"
               title="Open selected repositories in a Cursor workspace">
               <i class="fa fa-folder-open me-1"></i> Open in Cursor
             </button>
-            <button type="button" class="btn btn-amwal-cta" id="fetchAllBtn"
+            <button type="button" class="btn btn-amwal-ghost" id="fetchAllBtn"
               title="Fetch remotes for every repository">
               <i class="fa fa-cloud-download me-1"></i> Fetch all
             </button>
-            <button type="button" class="btn btn-amwal-cta" id="get-latest-selected">
+            <button type="button" class="btn btn-amwal-sync" id="get-latest-selected">
               <i class="fa fa-download me-1"></i> Get latest
             </button>
           </div>
