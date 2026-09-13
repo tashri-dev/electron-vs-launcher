@@ -1,6 +1,6 @@
 {
   "name": "electron-vs-launcher",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "Amwal Pay Solution Launcher",
   "main": "src/main.js",
   "scripts": {
@@ -34,7 +34,7 @@
     "artifactName": "${name}-${version}-${arch}.${ext}",
     "publish": {
       "provider": "github",
-      "owner": "MahmoudElgml",
+      "owner": "tashri-dev",
       "repo": "electron-vs-launcher"
     },
     "mac": {

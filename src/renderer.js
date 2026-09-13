@@ -2727,7 +2727,7 @@ loadSolutions();
         if (installPending) {
           return;
         }
-        setStatusText(payload.message || "Update check failed");
+        setStatusText("Update check failed");
         setInstallVisible(false);
         showToast(payload.message || "Update check failed", "error");
         break;
