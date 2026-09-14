@@ -20,6 +20,11 @@ const branchSelectsByRepo = new Map();
 const branchStateByRepo = new Map();
 let globalBranchRefreshTimer = null;
 
+/** @type {Map<string, Set<HTMLElement>>} */
+const tagLabelsByRepo = new Map();
+/** @type {Map<string, string | null>} */
+const lastTagByRepo = new Map();
+
 /** Migrated once to user-settings.json (userData); safe to remove later */
 const LEGACY_ROOT_PATH_STORAGE_KEY = "electron-vs-launcher-root-path";
 
@@ -189,6 +194,45 @@ async function listGitBranches(repoDir) {
   }
   const branches = SWITCHABLE_BRANCHES.filter((branch) => found.has(branch));
   return { branches, current };
+}
+
+async function getLastTagForBranch(repoDir, branch) {
+  if (!branch) {
+    return null;
+  }
+  try {
+    const { stdout } = await gitExec(repoDir, ["describe", "--tags", "--abbrev=0", branch]);
+    return stdout.trim() || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function registerTagLabel(repoDir, el) {
+  if (!tagLabelsByRepo.has(repoDir)) {
+    tagLabelsByRepo.set(repoDir, new Set());
+  }
+  tagLabelsByRepo.get(repoDir).add(el);
+}
+
+function setTagLabelText(repoDir, text) {
+  const labels = tagLabelsByRepo.get(repoDir);
+  if (!labels) {
+    return;
+  }
+  labels.forEach((el) => {
+    el.textContent = text;
+  });
+}
+
+async function updateLastTagForRepo(repoDir, branch) {
+  if (!tagLabelsByRepo.has(repoDir)) {
+    return;
+  }
+  const resolvedBranch = branch || getSelectedBranchForRepo(repoDir);
+  const tag = await getLastTagForBranch(repoDir, resolvedBranch);
+  lastTagByRepo.set(repoDir, tag);
+  setTagLabelText(repoDir, tag ? `Last tag: ${tag}` : "");
 }
 
 function setBranchSelectPlaceholder(select, text) {
@@ -1479,6 +1523,7 @@ async function fetchAllRepos() {
         });
         succeeded += 1;
         refreshBranchSelectsForRepo(repoDir);
+        updateLastTagForRepo(repoDir);
       } catch (err) {
         failures.push({ name, error: formatErrorReason(err) });
       }
@@ -1697,6 +1742,7 @@ async function runGetLatest(repoDir, name, override) {
     );
     resetCustomBranchUiForRepo(repoDir);
     refreshBranchSelectsForRepo(repoDir);
+    updateLastTagForRepo(repoDir, branch);
   } catch (err) {
     showToast(
       `Get latest failed (${name}):\n${formatErrorReason(err)}`,
@@ -1921,6 +1967,18 @@ function createSolutionsTable(solutions, rootPath) {
     checkboxTd.appendChild(checkbox);
     checkboxTd.appendChild(label);
     checkboxTd.classList.add("text-nowrap");
+
+    const tagTarget = resolveGetLatestTarget(solution.solutionPath, rootPath);
+    if (!tagTarget.error) {
+      const tagNote = document.createElement("div");
+      tagNote.classList.add("small", "text-muted");
+      checkboxTd.appendChild(tagNote);
+      registerTagLabel(tagTarget.repoDir, tagNote);
+      const existingTag = lastTagByRepo.get(tagTarget.repoDir);
+      if (existingTag) {
+        tagNote.textContent = `Last tag: ${existingTag}`;
+      }
+    }
 
     checkbox.addEventListener("change", updateKillSelectedButtonState);
 
