@@ -1,103 +1,411 @@
 {
-    "rootPath": "D:\\git-repos\\amwal-pay\\",
-    "solutions": [
+    "rootPath": "~/Work/SC/",
+    "sections": [
         {
-            "name": "APG Membership",
-            "path": "APG.MembershipModulesAPIs\\APGMembership.sln",
-            "migratorPath": "APG.MembershipModulesAPIs\\src\\APGMembership.MigrationTools\\APGMembership.MigrationTools.csproj",
-            "dockerPort": "44389",
-            "contextFolder": "APG.MembershipModulesAPIs",
-            "imageContainerName": "apg-membership"
+            "title": "APG",
+            "solutions": [
+                {
+                    "name": "APG Fundamental",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.FundamentalModulesAPIs/src/APGFundamentals.Services.Api/APGFundamentals.Services.Api.csproj",
+                    "solutionPath": "APG/APG.FundamentalModulesAPIs/APGFundamentals.sln",
+                    "migratorPath": "APG/APG.FundamentalModulesAPIs/src/APGFundamental.MigrationTools/APGFundamental.MigrationTools.csproj",
+                    "dockerPort": "44390",
+                    "contextFolder": "APG.FundamentalModulesAPIs",
+                    "imageContainerName": "apg-fundamental"
+                },
+                {
+                    "name": "APG Membership",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MembershipModulesAPIs/APGMembership.sln",
+                    "startupProject": "APG/APG.MembershipModulesAPIs/src/APGMembership.Services.Api/APGMembership.Services.Api.csproj",
+                    "migratorPath": "APG/APG.MembershipModulesAPIs/src/APGMembership.MigrationTools/APGMembership.MigrationTools.csproj",
+                    "dockerPort": "44389",
+                    "contextFolder": "APG.MembershipModulesAPIs",
+                    "imageContainerName": "apg-membership"
+                },
+                {
+                    "name": "APG Transaction",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.TransactionModulesAPIs/src/APGTransaction.Services.Api/APGTransaction.Services.Api.csproj",
+                    "solutionPath": "APG/APG.TransactionModulesAPIs/APGTransaction.sln",
+                    "migratorPath": "APG/APG.TransactionModulesAPIs/src/APGTransactions.MigrationTools/APGTransactions.MigrationTools.csproj",
+                    "dockerPort": "44387",
+                    "contextFolder": "APG.TransactionModulesAPIs",
+                    "imageContainerName": "apg-transaction"
+                },
+                {
+                    "name": "APG Execution",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.ExecutionModulesAPIs/src/APGExecutions.Services.Api/APGExecutions.Services.Api.csproj",
+                    "solutionPath": "APG/APG.ExecutionModulesAPIs/APGExecutions.sln",
+                    "dockerPort": "44310",
+                    "contextFolder": "APG.ExecutionModulesAPIs",
+                    "imageContainerName": "apg-execution"
+                },
+                {
+                    "name": "APG Log",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.LogModulesAPIs/src/APGLogs.Services.Api/APGLogs.Services.Api.csproj",
+                    "solutionPath": "APG/APG.LogModulesAPIs/APGLogs.sln",
+                    "dockerPort": "44349",
+                    "contextFolder": "APG.LogModulesAPIs",
+                    "imageContainerName": "apg-log"
+                },
+                {
+                    "name": "APG Digital Integration",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.MPCSSIntegrationAPIs/src/APGMPCSSIntegration.Services.Api/APGDigitalIntegration.Services.Api.csproj",
+                    "solutionPath": "APG/APG.MPCSSIntegrationAPIs/APGDigitalIntegration.sln",
+                    "migratorPath": "APG/APG.MPCSSIntegrationAPIs/src/APGDigitalIntegration.MigrationTools/APGDigitalIntegration.MigrationTools.csproj",
+                    "dockerPort": "44392",
+                    "contextFolder": "APG.MPCSSIntegrationAPIs",
+                    "imageContainerName": "apg-mpcss"
+                },
+                {
+                    "name": "APG Notification",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.NotificationModulesAPIs/src/APGNotifications.Services.Api/APGNotifications.Services.Api.csproj",
+                    "solutionPath": "APG/APG.NotificationModulesAPIs/APGNotifications.sln",
+                    "migratorPath": "APG/APG.NotificationModulesAPIs/src/APGNotification.MigrationTools/APGNotification.MigrationTools.csproj",
+                    "dockerPort": "44391",
+                    "contextFolder": "APG.NotificationModulesAPIs",
+                    "imageContainerName": "apg-notification"
+                },
+                {
+                    "name": "APG Portal API Gateway",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.PortalAPIGateway/APGPortalAPIs/APGPortalAPIs.csproj",
+                    "solutionPath": "APG/APG.PortalAPIGateway/APGPortalAPIGateway.sln",
+                    "dockerPort": "44359",
+                    "contextFolder": "APG.PortalAPIGateway",
+                    "imageContainerName": "apg-portal-gateway"
+                },
+                {
+                    "name": "APG Portal Proxy",
+                    "category": "node",
+                    "solutionPath": "APG/APG.Portal.Proxy",
+                    "startupProject": "APG/APG.Portal.Proxy",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "APG Portal",
+                    "category": "angular",
+                    "solutionPath": "APG/APG.Portal",
+                    "startupProject": "APG/APG.Portal",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "APG Smartbox API Gateway",
+                    "category": "dotnet",
+                    "startupProject": "APG/APG.SmartBoxAPIGateway/APGSmartBoxAPIs/APGSmartBoxAPIs.csproj",
+                    "solutionPath": "APG/APG.SmartBoxAPIGateway/APGSmartBoxAPIGateway.sln",
+                    "dockerPort": "44357",
+                    "contextFolder": "APG.SmartBoxAPIGateway",
+                    "imageContainerName": "apg-smartbox-gateway"
+                },
+                {
+                    "name": "APG eCommerce Smartbox Proxy",
+                    "category": "node",
+                    "solutionPath": "APG/APG.eCommerceSmartBox.Proxy",
+                    "startupProject": "APG/APG.eCommerceSmartBox.Proxy",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "APG eCommerce Smartbox",
+                    "category": "angualr",
+                    "solutionPath": "APG/APG.eCommerceSmartBox",
+                    "startupProject": "APG/APG.eCommerceSmartBox",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "Amwal File Manager",
+                    "category": "node",
+                    "solutionPath": "APG/Amwal.FileManager",
+                    "startupProject": "APG/Amwal.FileManager",
+                    "npmScript": "start",
+                    "port": null
+                }
+            ]
         },
         {
-            "name": "APG Portal API Gateway",
-            "path": "APG.PortalAPIGateway\\APGPortalAPIGateway.sln",
-            "dockerPort": "44359",
-            "contextFolder": "APG.PortalAPIGateway",
-            "imageContainerName": "apg-portal-gateway"
+            "title": "Merchant API Gateways",
+            "solutions": [
+                {
+                    "name": "APG Merchant App API",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "MerchantAppAPI-Development",
+                    "aspnetCoreUrls": "https://localhost:7034;http://localhost:5020"
+                },
+                {
+                    "name": "APG E-Commerce SDK",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "ECommerceSDK-Development",
+                    "aspnetCoreUrls": "https://localhost:7035;http://localhost:5021"
+                },
+                {
+                    "name": "APG Webhook",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "Webhook-Development",
+                    "aspnetCoreUrls": "https://localhost:7036;http://localhost:5023"
+                },
+                {
+                    "name": "APG SoftPOS",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "SoftPOS-Development",
+                    "aspnetCoreUrls": "https://localhost:7037;http://localhost:5024"
+                },
+                {
+                    "name": "APG POS",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "POS-Development",
+                    "aspnetCoreUrls": "https://localhost:7038;http://localhost:5025"
+                },
+                {
+                    "name": "APG Zid",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "Zid-Development",
+                    "aspnetCoreUrls": "https://localhost:7038;http://localhost:5026"
+                },
+                {
+                    "name": "APG Visa KIC",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "VisaKIC-Development",
+                    "aspnetCoreUrls": "https://localhost:7039;http://localhost:5027"
+                },
+                {
+                    "name": "APG SoftPOS SDK",
+                    "category": "dotnet",
+                    "solutionPath": "APG/APG.MerchantAppAPIGateway/APG.MerchentAppAPIGateway.sln",
+                    "startupProject": "APG/APG.MerchantAppAPIGateway/src/APG.MerchentAppGateway/APG.MerchantAppGateway.csproj",
+                    "aspnetCoreEnvironment": "SoftPOSSDK-Development",
+                    "aspnetCoreUrls": "https://localhost:7040;http://localhost:5028"
+                }
+            ]
         },
         {
-            "name": "APG Fundamental",
-            "path": "APG.FundamentalModulesAPIs\\APGFundamentals.sln",
-            "migratorPath": "APG.FundamentalModulesAPIs\\src\\APGFundamental.MigrationTools\\APGFundamental.MigrationTools.csproj",
-            "dockerPort": "44390",
-            "contextFolder": "APG.FundamentalModulesAPIs",
-            "imageContainerName": "apg-fundamental"
+            "title": "AmwalSS",
+            "solutions": [
+                {
+                    "name": "AmwalSS Fundamental",
+                    "category": "dotnet",
+                    "startupProject": "AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.Services.Api/AmwalSSFundamental.Services.Api.csproj",
+                    "solutionPath": "AmwalSS/AmwalSS.Fundamental/AmwalSSFundamental.sln",
+                    "migratorPath": "AmwalSS/AmwalSS.Fundamental/src/AmwalSSFundamental.MigrationTools/AmwalSSFundamental.MigrationTools.csproj",
+                    "dockerPort": "44309",
+                    "contextFolder": "AmwalSS.Fundamental",
+                    "imageContainerName": "amwalss-fundamental"
+                },
+                {
+                    "name": "AmwalSS Membership",
+                    "category": "dotnet",
+                    "startupProject": "AmwalSS/AmwalSS.Membership/src/AmwalSSMembership.Services.Api/AmwalSSMembership.Services.Api.csproj",
+                    "solutionPath": "AmwalSS/AmwalSS.Membership/AmwalSSMembership.slnx",
+                    "migratorPath": "AmwalSS/AmwalSS.Membership/src/AmwalSSMembership.MigrationTools/AmwalSSMembership.MigrationTools.csproj",
+                    "dockerPort": "44379",
+                    "contextFolder": "AmwalSS.Membership",
+                    "imageContainerName": "amwalss-membership"
+                },
+                {
+                    "name": "AmwalSS Log",
+                    "category": "dotnet",
+                    "startupProject": "AmwalSS/AmwalSS.LogModulesAPIs/src/AmwalSSLog.Services.Api/AmwalSSLog.Services.Api.csproj",
+                    "solutionPath": "AmwalSS/AmwalSS.LogModulesAPIs/AmwalSSLogs.sln",
+                    "dockerPort": "44350",
+                    "contextFolder": "AmwalSS.LogModulesAPIs",
+                    "imageContainerName": "amwalss-log"
+                },
+                {
+                    "name": "AmwalSS Portal Gateway",
+                    "category": "dotnet",
+                    "startupProject": "AmwalSS/AmwalSS.PortalAPIGateway/src/AmwalSSPortal.Services.Api/AmwalSSPortal.Services.Api.csproj",
+                    "solutionPath": "AmwalSS/AmwalSS.PortalAPIGateway/AmwalSSPortalAPIGateway.sln",
+                    "dockerPort": "44358",
+                    "contextFolder": "AmwalSS.PortalAPIGateway",
+                    "imageContainerName": "amwalss-portal-gateway"
+                },
+                {
+                    "name": "AmwalSS Proxy",
+                    "category": "node",
+                    "solutionPath": "AmwalSS/AmwalSS.PortalProxy",
+                    "startupProject": "AmwalSS/AmwalSS.PortalProxy",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "AmwalSS Portal",
+                    "category": "angular",
+                    "solutionPath": "AmwalSS/AmwalSS.Portal",
+                    "startupProject": "AmwalSS/AmwalSS.Portal",
+                    "npmScript": "start",
+                    "port": null
+                }
+            ]
         },
         {
-            "name": "APG Transaction",
-            "path": "APG.TransactionModulesAPIs\\APGTransaction.sln",
-            "migratorPath": "APG.TransactionModulesAPIs\\src\\APGTransactions.MigrationTools\\APGTransactions.MigrationTools.csproj",
-            "dockerPort": "44387",
-            "contextFolder": "APG.TransactionModulesAPIs",
-            "imageContainerName": "apg-transaction"
+            "title": "Switch",
+            "solutions": [
+                {
+                    "name": "Omannet Switch",
+                    "category": "dotnet",
+                    "solutionPath": "Switch/Amwal.OmanNetSwitch/Amwal.OmanNetSwitch.sln",
+                    "startupProject": "Switch/Amwal.OmanNetSwitch/src/Amwal.OmanNetSwitch.Services.Api/Amwal.OmanNetSwitch.Services.Api.csproj",
+                    "migratorPath": "Switch/Amwal.OmanNetSwitch/src/Amwal.OmanNetSwitch.MigrationTools/Amwal.OmanNetSwitch.MigrationTools.csproj",
+                    "dockerPort": "8583",
+                    "contextFolder": "Amwal.OmanNetSwitch",
+                    "imageContainerName": "switch-omannet"
+                },
+                {
+                    "name": "Cybersource Switch",
+                    "category": "dotnet",
+                    "solutionPath": "Switch/Amwal.CybersourceSwitch/Amwal.CybersourceSwitch.sln",
+                    "startupProject": "Switch/Amwal.CybersourceSwitch/src/Amwal.CybersourceSwitch.Services.Api/Amwal.CybersourceSwitch.Services.Api.csproj",
+                    "dockerPort": "8584",
+                    "contextFolder": "Amwal.CybersourceSwitch",
+                    "imageContainerName": "switch-cybersource"
+                },
+                {
+                    "name": "HSM",
+                    "category": "dotnet",
+                    "solutionPath": "Switch/Amwal.HSM.Integration/Amwal.HSM.Integration.sln",
+                    "startupProject": "Switch/Amwal.HSM.Integration/src/Amwal.HSM.Integration.Api/Amwal.HSM.Integration.Api.csproj",
+                    "dockerPort": "8578",
+                    "contextFolder": "Amwal.HSM.Integration",
+                    "imageContainerName": "hsm"
+                }
+            ]
         },
         {
-            "name": "APG Log",
-            "path": "APG.LogModulesAPIs\\APGLogs.sln",
-            "dockerPort": "44349",
-            "contextFolder": "APG.LogModulesAPIs",
-            "imageContainerName": "apg-log"
+            "title": "SRM",
+            "solutions": [
+                {
+                    "name": "SRM Fundamental",
+                    "category": "dotnet",
+                    "solutionPath": "SRM/SRM.Fundamentals/SRM.Fundamentals.sln",
+                    "startupProject": "SRM/SRM.Fundamentals/src/SRM.Fundamentals.Services.Api/SRM.Fundamentals.Services.Api.csproj",
+                    "migratorPath": "SRM/SRM.Fundamentals/src/SRM.Fundamentals.MigrationTools/SRM.Fundamentals.MigrationTools.csproj"
+                },
+                {
+                    "name": "SRM Membership",
+                    "category": "dotnet",
+                    "solutionPath": "SRM/SRM.Membership/SRM.Membership.sln",
+                    "startupProject": "SRM/SRM.Membership/src/SRM.Membership.Services.Api/SRM.Membership.Services.Api.csproj",
+                    "migratorPath": "SRM/SRM.Membership/src/SRM.Membership.MigrationTools/SRM.Membership.MigrationTools.csproj"
+                },
+                {
+                    "name": "SRM Log",
+                    "category": "dotnet",
+                    "solutionPath": "SRM/SRM.LogModulesAPIs/SRMLogs.sln",
+                    "startupProject": "SRM/SRM.LogModulesAPIs/src/SRMLogs.Services.Api/SRMLogs.Services.Api.csproj"
+                },
+                {
+                    "name": "SRM Notifications",
+                    "category": "dotnet",
+                    "solutionPath": "SRM/SRM.Notifications/SRM.Notifications.sln",
+                    "startupProject": "SRM/SRM.Notifications/src/SRM.Notifications.Services.Api/SRM.Notifications.Services.Api.csproj",
+                    "migratorPath": "SRM/SRM.Notifications/src/SRM.Notification.MigrationTools/SRM.Notification.MigrationTools.csproj"
+                },
+                {
+                    "name": "SRM Portal API Gateway",
+                    "category": "dotnet",
+                    "solutionPath": "SRM/SRM.PortalAPIGateway/SRM.PortalAPIGateway.sln",
+                    "startupProject": "SRM/SRM.PortalAPIGateway/SRM.PortalAPIs/SRM.PortalAPIs.csproj"
+                },
+                {
+                    "name": "SRM Portal Proxy",
+                    "category": "node",
+                    "solutionPath": "SRM/SRM.Portal.Proxy",
+                    "startupProject": "SRM/SRM.Portal.Proxy",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "SRM Portal",
+                    "category": "angular",
+                    "solutionPath": "SRM/SRM.Portal",
+                    "startupProject": "SRM/SRM.Portal",
+                    "npmScript": "start",
+                    "port": null
+                }
+            ]
         },
         {
-            "name": "APG Smartbox API Gateway",
-            "path": "APG.SmartBoxAPIGateway\\APGSmartBoxAPIGateway.sln",
-            "dockerPort": "44357",
-            "contextFolder": "APG.SmartBoxAPIGateway",
-            "imageContainerName": "apg-smartbox-gateway"
-        },
-        {
-            "name": "APG Execution",
-            "path": "APG.ExecutionModulesAPIs\\APGExecutions.sln",
-            "dockerPort": "44310",
-            "contextFolder": "APG.ExecutionModulesAPIs",
-            "imageContainerName": "apg-execution"
-        },
-        {
-            "name": "APG Digital Integration",
-            "path": "APG.MPCSSIntegrationAPIs\\APGDigitalIntegration.sln",
-            "migratorPath": "APG.MPCSSIntegrationAPIs\\src\\APGDigitalIntegration.MigrationTools\\APGDigitalIntegration.MigrationTools.csproj",
-            "dockerPort": "44392",
-            "contextFolder": "APG.MPCSSIntegrationAPIs",
-            "imageContainerName": "apg-mpcss"
-        },
-        {
-            "name": "APG Notification",
-            "path": "APG.NotificationModulesAPIs\\APGNotifications.sln",
-            "migratorPath": "APG.NotificationModulesAPIs\\src\\APGNotification.MigrationTools\\APGNotification.MigrationTools.csproj",
-            "dockerPort": "44391",
-            "contextFolder": "APG.NotificationModulesAPIs",
-            "imageContainerName": "apg-notification"
-        },
-        {
-            "name": "AmwalSS Fundamental",
-            "path": "AmwalSS.Fundamental\\AmwalSSFundamental.sln",
-            "migratorPath": "AmwalSS.Fundamental\\src\\AmwalSSFundamental.MigrationTools\\AmwalSSFundamental.MigrationTools.csproj",
-            "dockerPort": "44309",
-            "contextFolder": "AmwalSS.Fundamental",
-            "imageContainerName": "amwalss-fundamental"
-        },
-        {
-            "name": "AmwalSS Membership",
-            "path": "AmwalSS.Membership\\AmwalSSMembership.sln",
-            "migratorPath": "AmwalSS.Membership\\src\\AmwalSSMembership.MigrationTools\\AmwalSSMembership.MigrationTools.csproj",
-            "dockerPort": "44379",
-            "contextFolder": "AmwalSS.Membership",
-            "imageContainerName": "amwalss-membership"
-        },
-        {
-            "name": "AmwalSS Log",
-            "path": "AmwalSS.LogModulesAPIs\\AmwalSSLogs.sln",
-            "dockerPort": "44350",
-            "contextFolder": "AmwalSS.LogModulesAPIs",
-            "imageContainerName": "amwalss-log"
-        },
-        {
-            "name": "AmwalSS Portal Gateway",
-            "path": "AmwalSS.PortalAPIGateway\\AmwalSSPortalAPIGateway.sln",
-            "dockerPort": "44358",
-            "contextFolder": "AmwalSS.PortalAPIGateway",
-            "imageContainerName": "amwalss-portal-gateway"
+            "title": "TMS",
+            "solutions": [
+                {
+                    "name": "TMS Fundamental",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/TMS.Fundamentals/TMS.Fundamentals.sln",
+                    "startupProject": "TMS/TMS.Fundamentals/src/TMS.Fundamentals.Services.Api/TMS.Fundamentals.Services.Api.csproj",
+                    "migratorPath": "TMS/TMS.Fundamentals/src/TMS.Fundamentals.MigrationTools/TMS.Fundamentals.MigrationTools.csproj"
+                },
+                {
+                    "name": "TMS Membership",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/TMS.Membership/TMS.Membership.sln",
+                    "startupProject": "TMS/TMS.Membership/src/TMS.Membership.Services.Api/TMS.Membership.Services.Api.csproj",
+                    "migratorPath": "TMS/TMS.Membership/src/TMS.Membership.MigrationTools/TMS.Membership.MigrationTools.csproj"
+                },
+                {
+                    "name": "TMS Log",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/TMS.Logs/TMS.Logs.sln",
+                    "startupProject": "TMS/TMS.Logs/src/TMS.Logs.Services.Api/TMS.Logs.Services.Api.csproj"
+                },
+                {
+                    "name": "TMS Notifications",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/TMS.Notifications/TMS.Notifications.sln",
+                    "startupProject": "TMS/TMS.Notifications/src/TMS.Notifications.Services.Api/TMS.Notifications.Services.Api.csproj",
+                    "migratorPath": "TMS/TMS.Notifications/src/TMS.Notification.MigrationTools/TMS.Notification.MigrationTools.csproj"
+                },
+                {
+                    "name": "TMS Portal API Gateway",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/TMS.PortalAPIGateway/TMS.PortalAPIGateway.sln",
+                    "startupProject": "TMS/TMS.PortalAPIGateway/TMS.PortalAPIs/TMS.PortalAPIs.csproj"
+                },
+                {
+                    "name": "KMS API Gateway",
+                    "category": "dotnet",
+                    "solutionPath": "TMS/KMS.APIGateway/KMS.APIGateway.sln",
+                    "startupProject": "TMS/KMS.APIGateway/KMS.APIs/KMS.APIs.csproj"
+                },
+                {
+                    "name": "TMS Portal Proxy",
+                    "category": "node",
+                    "solutionPath": "TMS/TMS.Portal.Proxy",
+                    "startupProject": "TMS/TMS.Portal.Proxy",
+                    "npmScript": "start",
+                    "port": null
+                },
+                {
+                    "name": "TMS Portal",
+                    "category": "node",
+                    "solutionPath": "TMS/TMS.Portal",
+                    "startupProject": "TMS/TMS.Portal",
+                    "npmScript": "start",
+                    "port": null
+                }
+            ]
         }
     ]
 }

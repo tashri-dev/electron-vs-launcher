@@ -1,39 +1,64 @@
 {
   "name": "electron-vs-launcher",
-  "version": "1.0.0",
-  "description": "",
-  "main": "main.js",
+  "version": "1.3.5",
+  "description": "Amwal Pay Solution Launcher",
+  "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "icons": "node scripts/generate-app-icons.js",
+    "version:show": "node scripts/show-version.js",
+    "version:write-meta": "node scripts/write-version-meta.js",
+    "version:patch": "npm version patch && npm run version:write-meta",
+    "version:minor": "npm version minor && npm run version:write-meta",
+    "version:major": "npm version major && npm run version:write-meta",
+    "pack": "npm run version:write-meta && electron-builder --dir",
+    "dist": "npm run version:write-meta && electron-builder",
+    "dist:unsigned": "npm run version:write-meta && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "publish": "npm run version:write-meta && electron-builder --publish always"
   },
   "build": {
-    "appId": "your.app.id",
+    "appId": "com.amwalpay.solution-launcher",
+    "productName": "Amwal Pay Solution Launcher",
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
-    "win": {
-      "icon": "build/icon.ico"
+    "files": [
+      "**/*",
+      "!**/.DS_Store",
+      "!dist/**"
+    ],
+    "asarUnpack": [
+      "config.json"
+    ],
+    "artifactName": "${name}-${version}-${arch}.${ext}",
+    "publish": {
+      "provider": "github",
+      "owner": "tashri-dev",
+      "repo": "electron-vs-launcher"
     },
     "mac": {
-      "icon": "build/icon.icns"
-    },
-    "linux": {
-      "icon": "build/icon.png"
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
     }
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
-    "typescript": "^5.3.3"
+    "electron": "42.2.0",
+    "electron-builder": "^26.8.1",
+    "sharp": "^0.34.5",
+    "typescript": "^6.0.3"
   },
   "dependencies": {
-    "bootstrap": "^5.3.2",
+    "bootstrap": "^5.3.8",
     "electron-notification": "^1.0.0",
+    "electron-updater": "^6.8.3",
     "font-awesome": "^4.7.0"
   }
 }
