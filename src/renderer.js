@@ -1730,16 +1730,20 @@ async function runGetLatest(repoDir, name, override) {
   try {
     const { branch, create } = await resolveBranchForGetLatest(repoDir, override);
     await gitExec(repoDir, ["checkout", ...(create ? ["-b"] : []), branch]);
-    const { stdout, stderr } = await gitExec(repoDir, ["pull"], {
-      timeout: GIT_FETCH_TIMEOUT_MS,
-    });
-    const okMsg = [stdout, stderr].filter(Boolean).join("").trim();
-    showToast(
-      okMsg
-        ? `Get latest: ${name} (${branch})\n${okMsg}`
-        : `Get latest succeeded: ${name} (${branch})`,
-      "success"
-    );
+    if (create) {
+      showToast(`Created and checked out ${name} (${branch}) from the current branch`, "success");
+    } else {
+      const { stdout, stderr } = await gitExec(repoDir, ["pull"], {
+        timeout: GIT_FETCH_TIMEOUT_MS,
+      });
+      const okMsg = [stdout, stderr].filter(Boolean).join("").trim();
+      showToast(
+        okMsg
+          ? `Get latest: ${name} (${branch})\n${okMsg}`
+          : `Get latest succeeded: ${name} (${branch})`,
+        "success"
+      );
+    }
     resetCustomBranchUiForRepo(repoDir);
     refreshBranchSelectsForRepo(repoDir);
     updateLastTagForRepo(repoDir, branch);
